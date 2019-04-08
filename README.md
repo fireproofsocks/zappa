@@ -1,6 +1,6 @@
 # Zappa
 
-Handlebars templates in Elixir.
+Handlebars templates in Elixir (WORK IN PROGRESS...)
 
 Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  Handlebars builds on the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) by adding in some logic and functions to the templates.  Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconoclastic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
 
