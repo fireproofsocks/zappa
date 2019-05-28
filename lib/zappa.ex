@@ -10,36 +10,66 @@ defmodule Zappa do
 
   ## Examples
 
-      iex> Zappa.compile_template()
+      iex> Zappa.handlebars2eex()
       :world
 
   """
-  def compile_template(template) do
+  def handlebars2eex(template) do
     # TODO
+    # Blocks... for each block |> parse_main
+    # Helpers
+    # Regular tags (inside a block)
     template
   end
 
-  def parse(template, values, helpers) do
-    Logger.debug(template)
-    Logger.debug(values)
-    Logger.debug(helpers)
+  # Main parsing function
+  def parse_main(template) do
     template
+    # Strip out any existing EEx (security!)
+    # raw-helper?
+    # partials?
+    |> parse_comments()
+    |> parse_triple_braces()
+    |> parse_double_braces()
   end
 
-  def register_helper(tag, callback) do
+  def parse_double_braces(template) do
+    regex = ~r/{{\s*(\p{L}*)\s*}}/u
+    findings = Regex.scan(regex, template)
+
+    Enum.reduce(findings, template, fn [full_tag, var_name], acc ->
+      replacement = "<%= HtmlEntities.encode(#{var_name}) %>"
+      String.replace(acc, full_tag, replacement)
+    end)
 
   end
 
-  @doc """
-  Hello world.
+  def parse_triple_braces(template) do
+    regex = ~r/{{{\s*(\p{L}*)\s*}}}/u
+    findings = Regex.scan(regex, template)
 
-  ## Examples
+    Enum.reduce(findings, template, fn [full_tag, var_name], acc ->
+      replacement = "<%= #{var_name} %>"
+      String.replace(acc, full_tag, replacement)
+    end)
 
-      iex> Zappa.hello()
-      :world
-
-  """
-  def hello do
-    :world
   end
+
+  def parse_comments(template) do
+    regex = ~r/{{!\s*(\p{L}*)\s*}}/u
+    findings = Regex.scan(regex, template)
+
+    Enum.reduce(findings, template, fn [full_tag, contents], acc ->
+      replacement = "<%##{contents}%>"
+      String.replace(acc, full_tag, replacement)
+    end)
+  end
+
+#  def register_helper(tag, callback) do
+#
+#  end
+#
+#  def default_helpers() do
+#
+#  end
 end

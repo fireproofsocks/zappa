@@ -1,5 +1,7 @@
 # Handlebars
 
+Notes on Handlebars syntax:
+
 ## HTML Escaping
 
 - `{{ }}` - escape HTML characters.
@@ -32,6 +34,8 @@
 ```
 
 ## Block Expressions
+
+Block expressions have a start tag denoted with a `#`, e.g. `#list`, and an ending tag denoted with a `/`, e.g. `/list`:
 
 ```
 {{#list people}}{{firstName}} {{lastName}}{{/list}}
@@ -144,7 +148,6 @@ https://handlebarsjs.com/builtin_helpers.html
 
 ### `if`
 
-
 ### `unless`
 
 ### `with`
@@ -162,7 +165,8 @@ demonstrates how to pass a parameter to your helper
 ```
 
 ### `noop`
-
+https://handlebarsjs.com/block_helpers.html
+\
 
 
 ### `each`

@@ -2,7 +2,7 @@
 
 Handlebars templates in Elixir (WORK IN PROGRESS...)
 
-Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  Handlebars builds on the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) by adding in some logic and functions to the templates.  Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconoclastic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
+Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/) templating language that works by converting handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  Handlebars builds on the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) by adding in some logic and functions to the templates.  Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconoclastic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
 
 
 ## Similar Packages
@@ -25,6 +25,13 @@ def deps do
     {:zappa, "~> 0.1.0"}
   ]
 end
+```
+
+For development purposes, you can install this repository using `git` and installing its dependencies:
+
+```
+git clone git@github.com:fireproofsocks/zappa.git
+mix deps.get
 ```
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
