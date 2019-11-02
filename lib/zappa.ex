@@ -65,6 +65,16 @@ defmodule Zappa do
     end)
   end
 
+  @doc """
+  This removes all EEX tags from the input template.
+  This is a security measure in case some nefarious user gets the sneaky idea to put EEX functions inside what should
+  be a Handlebars template.
+  """
+  def replace_eex(template) do
+    regex = ~r/<%.*%>/U
+    Regex.scan(regex, tpl)
+    |>  Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
+  end
 #  def register_helper(tag, callback) do
 #
 #  end

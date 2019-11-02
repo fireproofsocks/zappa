@@ -164,4 +164,39 @@ defmodule Zappa.RegexTest do
       assert true == result
     end
   end
+
+  describe "EEX" do
+    test "expressions are removed" do
+      tpl = "<% Elixir expression - inline with output %>"
+      regex = ~r/<%.*%>/
+      assert "" == String.replace(tpl, regex, "")
+    end
+
+    test "expression with equals sign are removed" do
+      tpl = "<%= Elixir expression - replace with result %>"
+      regex = ~r/<%.*%>/
+      assert "" == String.replace(tpl, regex, "")
+    end
+
+    test "quotations are removed" do
+      tpl = "<%% EEx quotation - returns the contents inside %>"
+      regex = ~r/<%.*%>/
+      assert "" == String.replace(tpl, regex, "")
+    end
+
+    test "comments are removed" do
+      tpl = "<%# Comments - they are discarded from source %>"
+      regex = ~r/<%.*%>/
+      assert "" == String.replace(tpl, regex, "")
+    end
+
+    test "multiple tags are stripped" do
+      tpl = "<% a %>A<%= b %>B<%% c %>C<%# d %>D"
+      regex = ~r/<%.*%>/U
+      result = Regex.scan(regex, tpl)
+        |>  Enum.reduce(tpl, fn [x | _], acc -> String.replace(acc, x, "") end)
+
+      assert "ABCD" == result
+    end
+  end
 end
