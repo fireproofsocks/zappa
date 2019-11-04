@@ -6,6 +6,14 @@ defmodule Zappa do
   require Logger
 
   @doc """
+
+  """
+  def eval_string(handlebars_template, values_list) do
+    handlebars2eex(handlebars_template)
+    |> EEx.eval_string(values_list)
+  end
+
+  @doc """
   Compiles a handlebars template to EEx
 
   ## Examples
@@ -16,16 +24,27 @@ defmodule Zappa do
   """
   def handlebars2eex(template) do
     # TODO
-    # Blocks... for each block |> parse_main
-    # Helpers
+    # Example concurrency:
+#    ["BTC-USD", "ETH-USD", "LTC-USD", "BCH-USD"]
+#    |> Enum.map(fn product_id->
+#      spawn(fn -> Coinbase.print_price(product_id) end)
+#    end)
+    # Blocks... for each block |> parse (#each, #noop, other registered helpers)
+    # Helpers (if, unless, with)
     # Regular tags (inside a block)
     template
+    |> strip_eex()
   end
 
-  # Main parsing function
-  def parse_main(template) do
+
+  def break_into_blocks(template) do
+    regex = ~r/{{\#(\p{L}{1,})\s{1,}(.+?)}}(.*){{\/\1}}/us
+    Regex.scan(regex, template)
+  end
+
+  # Main parsing function -- this can get called recursively
+  def parse(template) do
     template
-    # Strip out any existing EEx (security!)
     # raw-helper?
     # partials?
     |> parse_comments()
@@ -70,9 +89,9 @@ defmodule Zappa do
   This is a security measure in case some nefarious user gets the sneaky idea to put EEX functions inside what should
   be a Handlebars template.
   """
-  def replace_eex(template) do
+  def strip_eex(template) do
     regex = ~r/<%.*%>/U
-    Regex.scan(regex, tpl)
+    Regex.scan(regex, template)
     |>  Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
   end
 #  def register_helper(tag, callback) do

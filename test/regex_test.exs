@@ -110,6 +110,7 @@ defmodule Zappa.RegexTest do
       {{/list}}
       """
       # Ta-da! The regex that properly matches blocks using the \1 backreference
+      # The \1 is the back-reference to the first bit of text captured in parentheses, ie. the word that followed the "#"
       # See https://www.regular-expressions.info/backref.html
       regex = ~r/{{\#(\p{L}{1,})\s{1,}(\p{L}{1,})}}(.*){{\/\1}}/us
       result = Regex.scan(regex, tpl)
@@ -155,6 +156,26 @@ defmodule Zappa.RegexTest do
 
     end
 
+    test "dealing with as and block parameters after as" do
+      tpl = """
+      xxx{{#each something as |x|}}yyyy{{else}}zzzz{{/each}}
+      """
+      # The trick here is to use lazy instead of greedy -- you can do this via a lazy match (use .+? instead of .*)
+      # or rely on negated character classes.
+      # See https://www.regular-expressions.info/repeat.html
+      # Here's an option with backtracking (slower):
+      # regex = ~r/{{\#(\p{L}{1,})\s{1,}(.+?)}}(.*){{\/\1}}/us
+      # And here's one that uses a negated character class
+      regex = ~r/{{\#(\p{L}{1,})\s{1,}([^}]+)}}(.*){{\/\1}}/us
+      result = Regex.scan(regex, tpl)
+      [full_block, helper_name, opening_tag_contents, block_contents] = hd(result)
+
+      assert full_block == "{{#each something as |x|}}yyyy{{else}}zzzz{{/each}}"
+      assert helper_name == "each"
+      assert opening_tag_contents == "something as |x|"
+      assert block_contents == "yyyy{{else}}zzzz"
+    end
+
     test "simple tags" do
       tpl = "<p>{{ first }} {{last}}</p>"
       # This regex is exactly the same as above -- we just need to do recursion on the results
@@ -197,6 +218,37 @@ defmodule Zappa.RegexTest do
         |>  Enum.reduce(tpl, fn [x | _], acc -> String.replace(acc, x, "") end)
 
       assert "ABCD" == result
+    end
+  end
+
+  describe "else blocks" do
+    test "replace else" do
+      tpl = "something something {{else}} else else"
+      regex = ~r/{{\s?else\s?}}/U
+      result = String.replace(tpl, regex, "<% else %>")
+      assert "something something <% else %> else else" == result
+    end
+  end
+
+  describe "multies" do
+    test "example" do
+      original = "this is a sentence originally all lower-case"
+      replacements = [
+        {"a", "A"},
+        {"e", "E"},
+        {"i", "I"},
+        {"o", "O"},
+        {"u", "U"},
+      ]
+
+      output = Enum.reduce(replacements, original, fn {find, replacement}, acc ->
+          String.replace(acc, find, replacement) # <-- works
+      end)
+      spawn(fn -> String.replace(acc, find, replacement) end)
+
+
+      assert "thIs Is A sEntEncE OrIgInAlly All lOwEr-cAsE" == output
+
     end
   end
 end
