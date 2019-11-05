@@ -36,6 +36,13 @@ defmodule Zappa do
     |> strip_eex()
   end
 
+  def handlebars2eex(template, partials \\ %{}) do
+
+  end
+
+  def handlebars2eex(template, partials \\ %{}, helpers \\ %{}) do
+    # register default helpers
+  end
 
   def break_into_blocks(template) do
     regex = ~r/{{\#(\p{L}{1,})\s{1,}(.+?)}}(.*){{\/\1}}/us

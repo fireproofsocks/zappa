@@ -14,6 +14,11 @@ defmodule Zappa.Helpers do
   def if(opening_tag_contents, block_contents, full_block) do
     regex = ~r/{{\s?else\s?}}/U
     block_contents = String.replace(block_contents, regex, "<% else %>")
+    # on all blocks, down the wormhole...
+    # Content might be something like
+    # "something {{else}} beta beta"
+    # But also, it might represent nested blocks
+    # "something {{#if something}}True{{else}}False{{/if}} {{else}} beta beta"
     block_contents = Zappa.handlebars2eex(block_contents)
     # TODO: do we need to sanitize the opening_tag_contents to only allow a simple variable?
     eex_replacement = """

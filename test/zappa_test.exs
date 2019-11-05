@@ -13,6 +13,23 @@ defmodule ZappaTest do
 #  end
 
   describe "handlebars2eex/1" do
+    test "do nothing when there are no tags" do
+      tpl = ~s"""
+      This is regular text with no handlebar tags in it at all
+      """
+      assert tpl == Zappa.handlebars2eex(tpl)
+    end
+
+    test "Any EEx tags are stripped from the input string" do
+      tpl = ~s"""
+      Some <%= evil %> stuff
+      """
+      output = ~s"""
+      Some  stuff
+      """
+      assert output == Zappa.handlebars2eex(tpl)
+    end
+
     test "regular double braces" do
       tpl = ~s"""
 <div class="entry">
@@ -31,14 +48,18 @@ defmodule ZappaTest do
   </div>
 </div>
   """
+      assert output == Zappa.handlebars2eex(tpl)
     end
 
     test "partials" do
       tpl = "{{> myPartial }}"
       # How to know which variables are in scope to pass them to the partial?
+      # You can't do this: <%= render("key.html", key: key) %>
+      # you have to register your own partial
       output = ~s"""
-<%= render("key.html", key: key) %>
+
     """
+      assert output == Zappa.handlebars2eex(tpl)
     end
   end
 
