@@ -11,6 +11,14 @@ defmodule ZappaTest do
 #      assert "<p><%= HtmlEntities.encode(first) %> <%= HtmlEntities.encode(last) %></p>" == Zappa.parse(template, values)
 #    end
 #  end
+  describe "invalid syntax" do
+    test "closing tag precedes opening tag" do
+      tpl = "this is a bad}} string"
+    end
+    test "tags cannot appear inside one another" do
+      tpl = "{{opening {{ooops}}}} this is no good"
+    end
+  end
 
   describe "handlebars2eex/1" do
     test "do nothing when there are no tags" do
@@ -93,6 +101,21 @@ defmodule ZappaTest do
   end
 
   describe "with statement" do
+    tpl = ~s"""
+    <div class="entry">
+    {{#with story}}
+      <div class="intro">{{intro}}</div>
+      <div class="body">{{body}}</div>
+    {{/with}}
+    </div>
+    """
+    # ????? problems with atom vs string keys?
+    output = ~s"""
+      <div class="entry">
+        <div class="intro"><%= story["intro"] %></div>
+        <div class="body"><%= story["body"] %></div>
+    </div>
+    """
 
   end
 
