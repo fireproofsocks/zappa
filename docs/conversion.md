@@ -66,3 +66,7 @@ EEx:
 ```eex
 <%# Comments - they are discarded from source %>
 ```
+
+## Helpers
+
+See https://code-maven.com/handlebars-helpers

@@ -45,14 +45,15 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
 ## Features
 
-comments
+x comments
 each (arrays)
 each (objects)
 if
 unless
 with
-partials
+x partials
 @index
-raw-helper (Used when your final template needs to have mustache blocks.)
+raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
 `{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
 Literals (in helpers) e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}`
+helpers e.g. `{{link home}}` where `home` is an object with a `url` and `title` property 
