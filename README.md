@@ -54,3 +54,5 @@ with
 partials
 @index
 raw-helper (Used when your final template needs to have mustache blocks.)
+`{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
+Literals (in helpers) e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}`
