@@ -20,6 +20,11 @@ defmodule ZappaTest do
       tpl = "{{opening {{ooops}}}} this is no good"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
+
+    test "empty tags cause errors" do
+      tpl = "this is {{ }} no good"
+      assert {:error, _} = Zappa.handlebars2eex(tpl)
+    end
   end
 
   describe "handlebars2eex/1" do
