@@ -5,38 +5,65 @@ defmodule Zappa do
 
   require Logger
 
-  @doc """
-  Evaluate the handlebars string (the name is borrowed the name from EEx.eval_string)
+  # Types to help make the the specs and function documentation more clear.
+  @typedoc """
+  A valid [Handlebars.js](https://handlebarsjs.com/) template (as a string). [Try it](http://tryhandlebarsjs.com/)!
   """
-  @spec eval_string(String.t, list) :: String.t
+  @type handlebars_template :: String.t()
+
+  @typep head :: String.t() # The string being parsed, from the active point to the end.
+  @typep tail :: String.t() # The rest of the string
+  @typep ending_delimiter :: String.t() # A string denoting the end of a tag
+  @typep accumulator :: String.t()
+  @typep tag_name :: String.t() # The name of a tag, e.g. `<a href="localhost">` --> `a`
+  @typep tag_attributes :: String.t() # The attributes within tag, e.g. `<a href="localhost">` --> `href="localhost"`
+
+  @doc """
+  Evaluate the handlebars string and return the result. (The name is borrowed the name from EEx.eval_string)
+  """
+  @spec eval_string(handlebars_template, list) :: String.t
   def eval_string(handlebars_template, values_list) do
     handlebars2eex(handlebars_template)
     |> EEx.eval_string(values_list)
   end
 
+  @spec eval_string(handlebars_template, list, map) :: String.t
   def eval_string(handlebars_template, values_list, helpers) do
     handlebars2eex(handlebars_template, helpers)
     |> EEx.eval_string(values_list)
   end
 
+  @doc """
+  Retrieve the default helpers supported
+  """
+  @spec get_default_helpers() :: map
   def get_default_helpers() do
     %{
-      "if" => ""
+      "if" => &Zappa.BlockHelpers.If.parse_if/0
     }
   end
 
   @doc """
-  Compiles a handlebars template to EEx
+  Compiles a handlebars template to EEx using the default helpers (if, with, unless, etc.).
+  See get_default_helpers/0
 
 
   ## Examples
 
-      iex> Zappa.handlebars2eex()
-      :world
+      iex> handlebars_template = "Hello {{thing}}"
+      iex> Zappa.handlebars2eex(handlebars_template)
+      "Hello <%= thing %>"
 
   """
-  @spec handlebars2eex(String.t, map) :: {:ok, String.t} | {:error, String.t}
-  def handlebars2eex(template, helpers \\ %{}) do
+  @spec handlebars2eex(handlebars_template) :: {:ok, String.t} | {:error, String.t}
+  def handlebars2eex(template), do: handlebars2eex(template, get_default_helpers())
+
+  @doc """
+  Compiles a handlebars template to EEx using the helpers provided.
+
+  """
+  @spec handlebars2eex(handlebars_template, map) :: {:ok, String.t} | {:error, String.t}
+  def handlebars2eex(template, helpers) do
     template
     |> strip_eex()
     |> parse("", helpers)
@@ -97,7 +124,7 @@ defmodule Zappa do
 
   defp parse("{{{" <> tail, acc, helpers) do
     result = get_tag_attributes(tail, "}}}")
-    # TODO: check the tag_contents to see if there's junk in there.
+    # TODO: check to see if there is a helper registered! ???
     case result do
       {:ok, tag_contents, tail} -> parse(tail, acc <> "<%= #{tag_contents} %>", helpers)
       {:error, message} -> {:error, message}
@@ -106,7 +133,7 @@ defmodule Zappa do
 
   defp parse("{{" <> tail, acc, helpers) do
     result = get_tag_attributes(tail)
-    # TODO: check the tag_contents to see if there's junk in there.
+    # TODO: check to see if there is a helper registered!
     case result do
       {:ok, tag_contents, tail} -> parse(tail, acc <> "<%= HtmlEntities.encode(#{tag_contents}) %>", helpers)
       {:error, message} -> {:error, message}
@@ -127,20 +154,34 @@ defmodule Zappa do
   # This block is devoted to finding the inside of the tag and returning its contents, i.e. its "attributes".
   # e.g. given "something here}} etc..."
   # then return {:ok, "something here", "etc..."}
-  @spec get_tag_attributes(String.t, String.t, String.t) :: {:error, String.t} | {:ok, String.t, String.t}
-  defp get_tag_attributes(content, delimiter \\ "}}", tag_acc \\ "")
+  @spec get_tag_attributes(head, ending_delimiter, accumulator) :: {:error, String.t} | {:ok, accumulator, tail}
+  defp get_tag_attributes(head, delimiter \\ "}}", tag_acc \\ "")
   defp get_tag_attributes("", _delimiter, _tag_acc), do: {:error, "Unclosed tag."}
   defp get_tag_attributes(<<h :: binary - size(4), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: {:ok, tag_acc, tail}
+       do: separate_tag_name_from_attributes(tag_acc, tail)
+#       do: {:ok, tag_acc, tail}
   defp get_tag_attributes(<<h :: binary - size(3), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: {:ok, tag_acc, tail}
+       do: separate_tag_name_from_attributes(tag_acc, tail)
+#       do: {:ok, tag_acc, tail}
   defp get_tag_attributes(<<h :: binary - size(2), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: {:ok, tag_acc, tail}
+       do: separate_tag_name_from_attributes(tag_acc, tail)
+#       do: {:ok, tag_acc, tail}
   defp get_tag_attributes("{" <> tail, delimiter, tag_acc),
        do: {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
   defp get_tag_attributes(<<head :: binary - size(1)>> <> tail, delimiter, tag_acc),
        do: get_tag_attributes(tail, delimiter, tag_acc <> head)
 
+  # https://elixirforum.com/t/how-to-detect-if-a-given-character-grapheme-is-whitespace/26735/5
+  @spec separate_tag_name_from_attributes(accumulator, tail) :: {:error, String.t} | {:ok, tag_name, tag_attributes, tail}
+  defp separate_tag_name_from_attributes(tag_acc, tail) do
+    result = String.split(tag_acc, ~r/\p{Zs}/u, parts: 2)
+    case result do
+      [""] -> {:error, "Missing tag name"}
+      ["", _] -> {:error, "Missing tag name"}
+      [tag_name] -> {:ok, tag_name, "", tail}
+      [tag_name, tag_attributes] -> {:ok, tag_name, String.trim(tag_attributes), tail}
+    end
+  end
 
   @doc """
   This removes all EEX tags from the input template.

@@ -11,7 +11,7 @@ defmodule ZappaTest do
 #      assert "<p><%= HtmlEntities.encode(first) %> <%= HtmlEntities.encode(last) %></p>" == Zappa.parse(template, values)
 #    end
 #  end
-  describe "invalid syntax" do
+  describe "invalid syntax:" do
     test "closing tag precedes opening tag" do
       tpl = "this is a bad}} string"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
@@ -25,14 +25,20 @@ defmodule ZappaTest do
       tpl = "this is {{ }} no good"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
+
+#    test "attempts to hijack" do
+#      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
+#      assert {:error, _} = Zappa.handlebars2eex(tpl)
+#    end
   end
 
   describe "handlebars2eex/1" do
     test "do nothing when there are no tags" do
-      tpl = ~s"""
+      input = ~s"""
       This is regular text with no handlebar tags in it at all
       """
-      assert {:ok, tpl} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} = Zappa.handlebars2eex(input)
+      assert input == output
     end
 
     test "Any EEx tags are stripped from the input string" do
