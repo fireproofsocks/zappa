@@ -3,7 +3,7 @@ defmodule Zappa.Helpers do
   Helper functions
   """
 
-  @doc"""
+  @doc """
   Desired output:
   <%= if your_variable %>
     HTML
@@ -26,7 +26,8 @@ defmodule Zappa.Helpers do
       #{block_contents}
       <% end %>
     """
-#    String.replace()
+
+    #    String.replace()
   end
 
   def replace_else(content) do
@@ -34,11 +35,10 @@ defmodule Zappa.Helpers do
     String.replace(content, regex, "<% else %>")
   end
 
-  @doc"""
+  @doc """
 
   """
   def list(template, opening_tag_contents, block_contents, full_block) do
-
   end
 
   @doc """
@@ -49,36 +49,35 @@ defmodule Zappa.Helpers do
   """
   def xlist() do
     m = %{a: "apple"}
+
     Enum.with_index(m)
-      |> Enum.each(
-        fn {x, index} ->
-          case x do
-            x when is_tuple(x) ->
-              {k, v} = x
-              IO.puts("#{k}: #{v} @index:#{index}")
-            x -> IO.puts("#{x} @index:#{index}")
-          end
-        end)
+    |> Enum.each(fn {x, index} ->
+      case x do
+        x when is_tuple(x) ->
+          {k, v} = x
+          IO.puts("#{k}: #{v} @index:#{index}")
+
+        x ->
+          IO.puts("#{x} @index:#{index}")
+      end
+    end)
   end
 
   @doc """
   This isn't a standard Handlebars feature, but it's so useful I included it here.
   """
   def join() do
-
   end
 
   @doc """
 
   """
   def unless() do
-
   end
 
   @doc """
 
   """
   def with() do
-
   end
 end

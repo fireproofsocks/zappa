@@ -10,7 +10,6 @@ defmodule Zappa.EExTest do
       assert "foo baz" == EEx.eval_string("foo <%= bar %>", bar: "baz")
     end
 
-
     test "basic usage with map requires conversion" do
       assert "foo baz" == EEx.eval_string("foo <%= bar %>", Map.to_list(%{bar: "baz"}))
     end

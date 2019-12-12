@@ -1,21 +1,22 @@
 defmodule ZappaTest do
   use ExUnit.Case
-#  doctest Zappa
+  #  doctest Zappa
 
   # http://tryhandlebarsjs.com/
 
-#  describe "handlebars2eex/1" do
-#    test "something" do
-#      template = "<p>{{ first }} {{last}}</p>"
-#      values = [first: "Bog", last: "Man"]
-#      assert "<p><%= HtmlEntities.encode(first) %> <%= HtmlEntities.encode(last) %></p>" == Zappa.parse(template, values)
-#    end
-#  end
+  #  describe "handlebars2eex/1" do
+  #    test "something" do
+  #      template = "<p>{{ first }} {{last}}</p>"
+  #      values = [first: "Bog", last: "Man"]
+  #      assert "<p><%= HtmlEntities.encode(first) %> <%= HtmlEntities.encode(last) %></p>" == Zappa.parse(template, values)
+  #    end
+  #  end
   describe "invalid syntax:" do
     test "closing tag precedes opening tag" do
       tpl = "this is a bad}} string"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
+
     test "tags cannot appear inside one another" do
       tpl = "{{opening {{ooops}}}} this is no good"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
@@ -26,10 +27,10 @@ defmodule ZappaTest do
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
 
-#    test "attempts to hijack" do
-#      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
-#      assert {:error, _} = Zappa.handlebars2eex(tpl)
-#    end
+    #    test "attempts to hijack" do
+    #      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
+    #      assert {:error, _} = Zappa.handlebars2eex(tpl)
+    #    end
   end
 
   describe "handlebars2eex/1" do
@@ -37,6 +38,7 @@ defmodule ZappaTest do
       input = ~s"""
       This is regular text with no handlebar tags in it at all
       """
+
       assert {:ok, output} = Zappa.handlebars2eex(input)
       assert input == output
     end
@@ -45,30 +47,33 @@ defmodule ZappaTest do
       tpl = ~s"""
       Some <%= evil %> stuff
       """
+
       output = ~s"""
       Some  stuff
       """
+
       assert {:ok, output} == Zappa.handlebars2eex(tpl)
     end
 
     test "regular double braces (html escaped)" do
       tpl = ~s"""
-        <div class="entry">
-          <h1>{{title}}</h1>
-          <div class="body">
-            {{body}}
-          </div>
+      <div class="entry">
+        <h1>{{title}}</h1>
+        <div class="body">
+          {{body}}
         </div>
-        """
+      </div>
+      """
 
       output = ~s"""
-        <div class="entry">
-          <h1><%= HtmlEntities.encode(title) %></h1>
-          <div class="body">
-            <%= HtmlEntities.encode(body) %>
-          </div>
+      <div class="entry">
+        <h1><%= HtmlEntities.encode(title) %></h1>
+        <div class="body">
+          <%= HtmlEntities.encode(body) %>
         </div>
-        """
+      </div>
+      """
+
       assert {:ok, output} == Zappa.handlebars2eex(tpl)
     end
 
@@ -90,6 +95,7 @@ defmodule ZappaTest do
         </div>
       </div>
       """
+
       assert {:ok, output} == Zappa.handlebars2eex(tpl)
     end
 
@@ -100,12 +106,16 @@ defmodule ZappaTest do
 
     test "partial that has been registered is substituted in" do
       tpl = "{{> myPartial }}"
-      assert {:ok, "some text here"} = Zappa.handlebars2eex(tpl, %{"myPartial" => "some text here"})
+
+      assert {:ok, "some text here"} =
+               Zappa.handlebars2eex(tpl, %{"myPartial" => "some text here"})
     end
 
     test "partial that has been registered is substituted in and its tags parsed" do
       tpl = "{{> myPartial }}"
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.handlebars2eex(tpl, %{"myPartial" => "hello {{thing}}"})
+
+      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} =
+               Zappa.handlebars2eex(tpl, %{"myPartial" => "hello {{thing}}"})
     end
 
     test "comments with short tags" do
@@ -120,6 +130,7 @@ defmodule ZappaTest do
         <%# This is a comment %>
       </div>
       """
+
       assert {:ok, output} == Zappa.handlebars2eex(tpl)
     end
 
@@ -135,6 +146,7 @@ defmodule ZappaTest do
         <%# This is a comment %>
       </div>
       """
+
       assert {:ok, output} == Zappa.handlebars2eex(tpl)
     end
   end
@@ -165,7 +177,6 @@ defmodule ZappaTest do
   end
 
   describe "unless statement" do
-
   end
 
   describe "with statement" do
@@ -179,6 +190,7 @@ defmodule ZappaTest do
       {{/with}}
       </div>
       """
+
       # ????? problems with atom vs string keys?
       output = ~s"""
         <div class="entry">
@@ -187,8 +199,6 @@ defmodule ZappaTest do
       </div>
       """
     end
-
-
   end
 
   describe "each loop" do
@@ -201,6 +211,7 @@ defmodule ZappaTest do
       {{/each}}
       </ul>
       """
+
       output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
@@ -219,6 +230,7 @@ defmodule ZappaTest do
       {{/each}}
       </ul>
       """
+
       output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
@@ -238,6 +250,7 @@ defmodule ZappaTest do
       {{/each}}
       </ul>
       """
+
       output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
@@ -256,6 +269,7 @@ defmodule ZappaTest do
       {{/each}}
       </ul>
       """
+
       output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
@@ -276,6 +290,7 @@ defmodule ZappaTest do
       {{/each}}
       </ul>
       """
+
       output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
@@ -294,27 +309,35 @@ defmodule ZappaTest do
       # Both of these work
       m = %{a: "apple", b: "boy", c: "cat"}
       m = ["apple", "boy", "cat"]
-      Enum.each(m,
+
+      Enum.each(
+        m,
         fn x ->
           case x do
             x when is_tuple(x) ->
               {k, v} = x
               IO.puts("#{k}: #{v}")
-            x -> IO.puts(x)
-          end
-      end)
 
-      Enum.with_index(m) |> Enum.each(
-        fn {x, index} ->
-          case x do
-            x when is_tuple(x) ->
-              {k, v} = x
-              IO.puts("#{k}: #{v} @index:#{index}")
-            x -> IO.puts("#{x} @index:#{index}")
+            x ->
+              IO.puts(x)
           end
-        end)
+        end
+      )
+
+      Enum.with_index(m)
+      |> Enum.each(fn {x, index} ->
+        case x do
+          x when is_tuple(x) ->
+            {k, v} = x
+            IO.puts("#{k}: #{v} @index:#{index}")
+
+          x ->
+            IO.puts("#{x} @index:#{index}")
+        end
+      end)
     end
   end
+
   describe "@index" do
     # https://stackoverflow.com/questions/38841248/elixir-templates-looping-through-a-list-with-iterator-value
     # Enum.with_index

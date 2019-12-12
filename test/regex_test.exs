@@ -19,13 +19,17 @@ defmodule Zappa.RegexTest do
     test "html escaping" do
       value = "All about <b>Tags</b>"
       regex = ~r/{{\s*subject\s*}}/
-      assert "<p>All about &lt;b&gt;Tags&lt;/b&gt;</p>" == String.replace("<p>{{subject}}</p>", regex,  HtmlEntities.encode(value))
+
+      assert "<p>All about &lt;b&gt;Tags&lt;/b&gt;</p>" ==
+               String.replace("<p>{{subject}}</p>", regex, HtmlEntities.encode(value))
     end
 
     test "triple braces for no escaping" do
       value = "All about <b>Tags</b>"
       regex = ~r/{{{\s*subject\s*}}}/
-      assert "<p>All about <b>Tags</b></p>" == String.replace("<p>{{{subject}}}</p>", regex, value)
+
+      assert "<p>All about <b>Tags</b></p>" ==
+               String.replace("<p>{{{subject}}}</p>", regex, value)
     end
 
     test "triple braces with variable name" do
@@ -41,11 +45,12 @@ defmodule Zappa.RegexTest do
     end
   end
 
-
   describe "finding all tag names" do
     test "as list" do
       tpl = "<p>{{ first }} {{last}}</p>"
-      assert [["{{ first }}", "first"], ["{{last}}", "last"]] == Regex.scan(~r/{{\s*(\p{L}*)\s*}}/u, tpl)
+
+      assert [["{{ first }}", "first"], ["{{last}}", "last"]] ==
+               Regex.scan(~r/{{\s*(\p{L}*)\s*}}/u, tpl)
     end
 
     test "mixed escaped and non-escaped" do
@@ -55,12 +60,12 @@ defmodule Zappa.RegexTest do
       assert [["{{ double }}", "double"], ["{{{triple}}}", "triple"]] == Regex.scan(regex, tpl)
     end
 
-#    test "lopsided?" do
-#      tpl = "<p>{{{ whoops }}</p>"
-#      # match 2 or 3 braces per side
-#      regex = ~r/\{{2,3}\s*(\p{L}*)\s*\}{2,3}/u
-#      assert [["{{ double }}", "double"], ["{{{triple}}}", "triple"]] == Regex.scan(regex, tpl)
-#    end
+    #    test "lopsided?" do
+    #      tpl = "<p>{{{ whoops }}</p>"
+    #      # match 2 or 3 braces per side
+    #      regex = ~r/\{{2,3}\s*(\p{L}*)\s*\}{2,3}/u
+    #      assert [["{{ double }}", "double"], ["{{{triple}}}", "triple"]] == Regex.scan(regex, tpl)
+    #    end
   end
 
   describe "block-level tags" do
@@ -75,21 +80,26 @@ defmodule Zappa.RegexTest do
 
       # We need the "dotall (s)" modifier here so that the .* can match everything between the start and finish
       regex = ~r/start(.*)end/us
-      assert [["start\n      treasure!\n    end", "\n      treasure!\n    "]] == Regex.scan(regex, tpl)
+
+      assert [["start\n      treasure!\n    end", "\n      treasure!\n    "]] ==
+               Regex.scan(regex, tpl)
     end
 
     test "matching the start of the block to the end with the name of the block" do
       tpl = """
-    {{#list people}}
-        <li>{{firstName}} {{lastName}}</li>
-{{/list}}
-"""
+          {{#list people}}
+              <li>{{firstName}} {{lastName}}</li>
+      {{/list}}
+      """
+
       regex = ~r/{{\#(\p{L}{1,})\s{1,}(\p{L}{1,})}}(.*){{\/(\p{L}{1,})}}/us
       result = Regex.scan(regex, tpl)
       [result | _] = result
       [full_match, opening_block_tag, var_name, inner_tpl, closing_block_tag] = result
 
-      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" == full_match
+      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" ==
+               full_match
+
       assert "list" == opening_block_tag
       assert "people" == var_name
       assert "\n        <li>{{firstName}} {{lastName}}</li>\n" == inner_tpl
@@ -109,6 +119,7 @@ defmodule Zappa.RegexTest do
               <li>{{firstName}} {{lastName}}</li>
       {{/list}}
       """
+
       # Ta-da! The regex that properly matches blocks using the \1 backreference
       # The \1 is the back-reference to the first bit of text captured in parentheses, ie. the word that followed the "#"
       # See https://www.regular-expressions.info/backref.html
@@ -118,7 +129,9 @@ defmodule Zappa.RegexTest do
       [result | _] = result
       [full_match, opening_block_tag, var_name, inner_tpl] = result
 
-      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" == full_match
+      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" ==
+               full_match
+
       assert "list" == opening_block_tag
       assert "people" == var_name
       assert "\n        <li>{{firstName}} {{lastName}}</li>\n" == inner_tpl
@@ -133,6 +146,7 @@ defmodule Zappa.RegexTest do
               <li>{{firstName}} {{lastName}}</li>
       {{/list}}
       """
+
       # This regex is exactly the same as above -- we just need to do recursion on the results
       regex = ~r/{{\#(\p{L}{1,})\s{1,}(\p{L}{1,})}}(.*){{\/\1}}/us
       result = Regex.scan(regex, tpl)
@@ -149,17 +163,19 @@ defmodule Zappa.RegexTest do
 
       [full_match, opening_block_tag, var_name, inner_tpl] = second_result
 
-      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" == full_match
+      assert "{{#list people}}\n        <li>{{firstName}} {{lastName}}</li>\n{{/list}}" ==
+               full_match
+
       assert "list" == opening_block_tag
       assert "people" == var_name
       assert "\n        <li>{{firstName}} {{lastName}}</li>\n" == inner_tpl
-
     end
 
     test "dealing with as and block parameters after as" do
       tpl = """
       xxx{{#each something as |x|}}yyyy{{else}}zzzz{{/each}}
       """
+
       # The trick here is to use lazy instead of greedy -- you can do this via a lazy match (use .+? instead of .*)
       # or rely on negated character classes.
       # See https://www.regular-expressions.info/repeat.html
@@ -214,8 +230,10 @@ defmodule Zappa.RegexTest do
     test "multiple tags are stripped" do
       tpl = "<% a %>A<%= b %>B<%% c %>C<%# d %>D"
       regex = ~r/<%.*%>/U
-      result = Regex.scan(regex, tpl)
-        |>  Enum.reduce(tpl, fn [x | _], acc -> String.replace(acc, x, "") end)
+
+      result =
+        Regex.scan(regex, tpl)
+        |> Enum.reduce(tpl, fn [x | _], acc -> String.replace(acc, x, "") end)
 
       assert "ABCD" == result
     end
@@ -233,22 +251,24 @@ defmodule Zappa.RegexTest do
   describe "multies" do
     test "example" do
       original = "this is a sentence originally all lower-case"
+
       replacements = [
         {"a", "A"},
         {"e", "E"},
         {"i", "I"},
         {"o", "O"},
-        {"u", "U"},
+        {"u", "U"}
       ]
 
-      output = Enum.reduce(replacements, original, fn {find, replacement}, acc ->
-          String.replace(acc, find, replacement) # <-- works
-      end)
+      output =
+        Enum.reduce(replacements, original, fn {find, replacement}, acc ->
+          # <-- works
+          String.replace(acc, find, replacement)
+        end)
+
       spawn(fn -> String.replace(acc, find, replacement) end)
 
-
       assert "thIs Is A sEntEncE OrIgInAlly All lOwEr-cAsE" == output
-
     end
   end
 end

@@ -2,32 +2,37 @@ defmodule Zappa do
   @moduledoc """
   Documentation for Zappa.
   """
-
+  alias Zappa.Tag
   require Logger
 
   # Types to help make the the specs and function documentation more clear.
   @typedoc """
   A valid [Handlebars.js](https://handlebarsjs.com/) template (as a string). [Try it](http://tryhandlebarsjs.com/)!
   """
-  @type handlebars_template :: String.t()
+  @typep handlebars_template :: String.t()
 
-  @typep head :: String.t() # The string being parsed, from the active point to the end.
-  @typep tail :: String.t() # The rest of the string
-  @typep ending_delimiter :: String.t() # A string denoting the end of a tag
+  # The string being parsed, from the active point to the end.
+  @typep head :: String.t()
+  # The rest of the string
+  @typep tail :: String.t()
+  # A string denoting the end of a tag
+  @typep ending_delimiter :: String.t()
   @typep accumulator :: String.t()
-  @typep tag_name :: String.t() # The name of a tag, e.g. `<a href="localhost">` --> `a`
-  @typep tag_attributes :: String.t() # The attributes within tag, e.g. `<a href="localhost">` --> `href="localhost"`
+  # The name of a tag, e.g. `<a href="localhost">` --> `a`
+  @typep tag_name :: String.t()
+  # The attributes within tag, e.g. `<a href="localhost">` --> `href="localhost"`
+  @typep tag_attributes :: String.t()
 
   @doc """
   Evaluate the handlebars string and return the result. (The name is borrowed the name from EEx.eval_string)
   """
-  @spec eval_string(handlebars_template, list) :: String.t
+  @spec eval_string(handlebars_template, list) :: String.t()
   def eval_string(handlebars_template, values_list) do
     handlebars2eex(handlebars_template)
     |> EEx.eval_string(values_list)
   end
 
-  @spec eval_string(handlebars_template, list, map) :: String.t
+  @spec eval_string(handlebars_template, list, map) :: String.t()
   def eval_string(handlebars_template, values_list, helpers) do
     handlebars2eex(handlebars_template, helpers)
     |> EEx.eval_string(values_list)
@@ -55,14 +60,14 @@ defmodule Zappa do
       "Hello <%= thing %>"
 
   """
-  @spec handlebars2eex(handlebars_template) :: {:ok, String.t} | {:error, String.t}
+  @spec handlebars2eex(handlebars_template) :: {:ok, String.t()} | {:error, String.t()}
   def handlebars2eex(template), do: handlebars2eex(template, get_default_helpers())
 
   @doc """
   Compiles a handlebars template to EEx using the helpers provided.
 
   """
-  @spec handlebars2eex(handlebars_template, map) :: {:ok, String.t} | {:error, String.t}
+  @spec handlebars2eex(handlebars_template, map) :: {:ok, String.t()} | {:error, String.t()}
   def handlebars2eex(template, helpers) do
     template
     |> strip_eex()
@@ -76,54 +81,68 @@ defmodule Zappa do
   # {{> partial
   # {{# block
   # {{{{raw-helper}}}}
+  @spec parse(String.t(), accumulator, map) :: {:ok, String.t()} | {:error, String.t()}
   defp parse("", acc, _helpers), do: {:ok, acc}
 
+  # Comment tag
   defp parse("{{!--" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail, "--}}")
+    result = detect_tag(tail, "--}}")
+
     case result do
-      {:ok, tag_contents, tail} -> parse(tail, acc <> "<%##{tag_contents}%>", helpers)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers)
       {:error, message} -> {:error, message}
     end
   end
 
+  # Comment tag
   defp parse("{{!" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail)
+    result = detect_tag(tail)
+
     case result do
-      {:ok, tag_contents, tail} -> parse(tail, acc <> "<%##{tag_contents}%>", helpers)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers)
       {:error, message} -> {:error, message}
     end
   end
 
+  # Block
   defp parse("{{#" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail)
+    result = detect_tag(tail)
     # Get name of block helper
     # seek the close of the block
     #    block_name = "if"
     #    helpers[block_name].()
   end
 
+  # Partial
   defp parse("{{>" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail)
+    result = detect_tag(tail)
     # TODO: check the tag_contents to see if there's junk in there.
     # TODO: expect that partials are registered as a function (not a simple string)
     case result do
       {:ok, tag_contents, tail} ->
         partial = String.trim(tag_contents)
+
         cond do
           Map.has_key?(helpers, partial) && is_binary(Map.get(helpers, partial)) ->
             presult = parse(Map.get(helpers, partial), "", helpers)
+
             case presult do
               {:ok, parsed_partial} -> parse(tail, acc <> parsed_partial, helpers)
               {:error, message} -> {:error, message}
             end
-          true -> {:error, "Partial is unregistered or is not a string."}
+
+          true ->
+            {:error, "Partial is unregistered or is not a string."}
         end
-      {:error, message} -> {:error, message}
+
+      {:error, message} ->
+        {:error, message}
     end
   end
 
+  # Non-escaped tag
   defp parse("{{{" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail, "}}}")
+    result = detect_tag(tail, "}}}")
     # TODO: check to see if there is a helper registered! ???
     case result do
       {:ok, tag_contents, tail} -> parse(tail, acc <> "<%= #{tag_contents} %>", helpers)
@@ -131,55 +150,88 @@ defmodule Zappa do
     end
   end
 
+  # Regular tag (HTML-escaped)
   defp parse("{{" <> tail, acc, helpers) do
-    result = get_tag_attributes(tail)
+    result = detect_tag(tail)
     # TODO: check to see if there is a helper registered!
     case result do
-      {:ok, tag_contents, tail} -> parse(tail, acc <> "<%= HtmlEntities.encode(#{tag_contents}) %>", helpers)
-      {:error, message} -> {:error, message}
+      {:ok, tag_contents, tail} ->
+        parse(tail, acc <> "<%= HtmlEntities.encode(#{tag_contents}) %>", helpers)
+
+      {:error, message} ->
+        {:error, message}
     end
   end
 
   # Try to include some information in the error message
-  defp parse("}}" <> tail, acc, _helpers)  do
+  defp parse("}}" <> tail, acc, _helpers) do
     cond do
       String.length(acc) > 32 ->
-        <<first_chunk :: binary - size(32)>> <> _ = acc
+        <<first_chunk::binary-size(32)>> <> _ = acc
         {:error, "Unexpected closing tag: }}#{first_chunk}"}
-      true -> {:error, "Unexpected closing tag: }}"}
+
+      true ->
+        {:error, "Unexpected closing tag: }}"}
     end
   end
-  defp parse(<<head :: binary - size(1)>> <> tail, acc, helpers), do: parse(tail, acc <> head, helpers)
 
-  # This block is devoted to finding the inside of the tag and returning its contents, i.e. its "attributes".
-  # e.g. given "something here}} etc..."
-  # then return {:ok, "something here", "etc..."}
-  @spec get_tag_attributes(head, ending_delimiter, accumulator) :: {:error, String.t} | {:ok, accumulator, tail}
-  defp get_tag_attributes(head, delimiter \\ "}}", tag_acc \\ "")
-  defp get_tag_attributes("", _delimiter, _tag_acc), do: {:error, "Unclosed tag."}
-  defp get_tag_attributes(<<h :: binary - size(4), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: separate_tag_name_from_attributes(tag_acc, tail)
-#       do: {:ok, tag_acc, tail}
-  defp get_tag_attributes(<<h :: binary - size(3), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: separate_tag_name_from_attributes(tag_acc, tail)
-#       do: {:ok, tag_acc, tail}
-  defp get_tag_attributes(<<h :: binary - size(2), tail :: binary>>, delimiter, tag_acc) when delimiter == h,
-       do: separate_tag_name_from_attributes(tag_acc, tail)
-#       do: {:ok, tag_acc, tail}
-  defp get_tag_attributes("{" <> tail, delimiter, tag_acc),
-       do: {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
-  defp get_tag_attributes(<<head :: binary - size(1)>> <> tail, delimiter, tag_acc),
-       do: get_tag_attributes(tail, delimiter, tag_acc <> head)
+  defp parse(<<head::binary-size(1)>> <> tail, acc, helpers),
+    do: parse(tail, acc <> head, helpers)
+
+  # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
+  @spec detect_tag(head, ending_delimiter, accumulator) ::
+          {:error, String.t()} | {:ok, %Tag{}, tail}
+  defp detect_tag(head, delimiter \\ "}}", tag_acc \\ "")
+  defp detect_tag("", _delimiter, _tag_acc), do: {:error, "Unclosed tag."}
+
+  defp detect_tag(<<h::binary-size(4), tail::binary>>, delimiter, tag_acc)
+       when delimiter == h do
+    make_tag_struct(tag_acc, tail)
+  end
+
+  defp detect_tag(<<h::binary-size(3), tail::binary>>, delimiter, tag_acc)
+       when delimiter == h do
+    make_tag_struct(tag_acc, tail)
+  end
+
+  defp detect_tag(<<h::binary-size(2), tail::binary>>, delimiter, tag_acc)
+       when delimiter == h do
+    make_tag_struct(tag_acc, tail)
+  end
+
+  defp detect_tag("{" <> tail, delimiter, tag_acc) do
+    {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
+  end
+
+  defp detect_tag(<<head::binary-size(1)>> <> tail, delimiter, tag_acc) do
+    detect_tag(tail, delimiter, tag_acc <> head)
+  end
 
   # https://elixirforum.com/t/how-to-detect-if-a-given-character-grapheme-is-whitespace/26735/5
-  @spec separate_tag_name_from_attributes(accumulator, tail) :: {:error, String.t} | {:ok, tag_name, tag_attributes, tail}
-  defp separate_tag_name_from_attributes(tag_acc, tail) do
+  @spec make_tag_struct(accumulator, tail) :: {:error, String.t()} | {:ok, %Tag{}, tail}
+  defp make_tag_struct(tag_acc, tail) do
     result = String.split(tag_acc, ~r/\p{Zs}/u, parts: 2)
+
     case result do
-      [""] -> {:error, "Missing tag name"}
-      ["", _] -> {:error, "Missing tag name"}
-      [tag_name] -> {:ok, tag_name, "", tail}
-      [tag_name, tag_attributes] -> {:ok, tag_name, String.trim(tag_attributes), tail}
+      [""] ->
+        {:error, "Missing tag name"}
+
+      ["", _] ->
+        {:error, "Missing tag name"}
+
+      [tag_name] ->
+        {:ok, %Tag{name: tag_name, attributes: "", contents: String.trim(tag_acc)}, tail}
+
+      [tag_name, tag_attributes] ->
+        {
+          :ok,
+          %Tag{
+            name: tag_name,
+            attributes: String.trim(tag_attributes),
+            contents: String.trim(tag_acc)
+          },
+          tail
+        }
     end
   end
 
@@ -191,8 +243,8 @@ defmodule Zappa do
   """
   def strip_eex(template) do
     regex = ~r/<%.*%>/U
+
     Regex.scan(regex, template)
     |> Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
   end
-
 end
