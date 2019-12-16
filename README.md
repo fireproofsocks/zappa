@@ -6,6 +6,7 @@ Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/)
 
 The specific use case that drove development of Zappa was to provide _untrusted users_ the ability to create and edit simplified templates. EEx templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and Mustache lacked the features that were required in these templates.
 
+See [Handlebars Documentation](https://devdocs.io/handlebars/)
 
 ## Similar Packages
 

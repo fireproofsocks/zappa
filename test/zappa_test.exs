@@ -22,11 +22,15 @@ defmodule ZappaTest do
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
 
-    test "empty tags cause errors" do
-      tpl = "this is {{ }} no good"
+    test "empty tags cause errors for certain types of tags" do
+      tpl = "this is {{>}} no good"
       assert {:error, _} = Zappa.handlebars2eex(tpl)
     end
 
+    test "closing block not allowed" do
+      tpl = "this is {{/my-block}} no good"
+      assert {:error, _} = Zappa.handlebars2eex(tpl)
+    end
     #    test "attempts to hijack" do
     #      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
     #      assert {:error, _} = Zappa.handlebars2eex(tpl)
