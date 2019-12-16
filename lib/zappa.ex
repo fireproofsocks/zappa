@@ -23,6 +23,9 @@ defmodule Zappa do
   # Denotes a string used to collect
   @typep accumulator :: String.t()
 
+
+  @typep block_contexts :: list()
+
   @doc """
   Evaluate the handlebars string and return the result. (The name is borrowed the name from EEx.eval_string)
   """
@@ -72,8 +75,7 @@ defmodule Zappa do
   def handlebars2eex(template, helpers) do
     template
     |> strip_eex()
-    |> parse("", helpers)
-#    |> parse("", helpers, [])
+    |> parse("", helpers, [])
   end
 
   # Ideally, we would accumulate for the current block until it ends
@@ -91,32 +93,35 @@ defmodule Zappa do
   # {{> partial
   # {{# block
   # {{{{raw-helper}}}}
-  @spec parse(handlebars_template, accumulator, map) :: {:ok, String.t()} | {:error, String.t()}
+  @spec parse(handlebars_template, accumulator, map, block_contexts) :: {:ok, String.t()} | {:error, String.t()}
   # End of handlebars template! All done!
-  defp parse("", acc, _helpers), do: {:ok, acc}
+  defp parse("", acc, _helpers, []), do: {:ok, acc}
+  defp parse("", acc, _helpers, [block | _]) do
+    {:error, "Unexpected end of template.  Closing block not found: {{/#{block}}}"}
+  end
 
   # Comment tag
-  defp parse("{{!--" <> tail, acc, helpers) do
+  defp parse("{{!--" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail, "--}}")
 
     case result do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
 
   # Comment tag
-  defp parse("{{!" <> tail, acc, helpers) do
+  defp parse("{{!" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail)
 
     case result do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
 
   # Block open
-  defp parse("{{#" <> tail, acc, helpers) do
+  defp parse("{{#" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail)
     # Get name of block helper
     # accumulate the block {{/block}}
@@ -130,7 +135,15 @@ defmodule Zappa do
         partial = get_helper(helpers, tag.name)
 
         case partial do
-          {:ok, callback} -> parse(resolve_partial(callback, tag.options) <> tail, acc, helpers)
+          {:ok, callback} ->
+            # Reset the accumulator, push this block onto the context
+            block_result = parse(tail, "", helpers, [Tag.name | block_contexts])
+            case block_result do
+              # resolve_block(callback, tag, block_contents)
+              {:ok, block_output, tail, block_contexts} -> parse(tail, acc <> resolve_block(callback, tag, block_output), helpers, block_contexts)
+              {:error, message} -> {:error, message}
+            end
+
           {:error, message} -> {:error, message}
         end
 
@@ -140,16 +153,27 @@ defmodule Zappa do
   end
 
   # Block close. Blocks must close the tag that opened.
-  defp parse("{{/" <> tail, acc, helpers) do
+  defp parse("{{/" <> tail, acc, helpers, []) do
+    {:error, "Unexpected closing block tag."}
+  end
+
+  defp parse("{{/" <> tail, acc, helpers, [active_block | block_contexts]) do
     result = accumulate_tag(tail)
 
     case result do
-      {:ok, _tag, _tail} ->
-        {:error, "Unexpected closing block tag."}
+      {:ok, tag, tail} ->
+        if tag.name != active_block do
+          {:error, "Unexpected closing block tag. Expected closing {{/#{active_block}}} tag."}
+        else
+          {:ok, acc, tail, block_contexts}
+        end
+      {:error, message} -> {:error, message}
     end
   end
+
+
   # Partial
-  defp parse("{{>" <> tail, acc, helpers) do
+  defp parse("{{>" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail)
 
     case result do
@@ -160,7 +184,7 @@ defmodule Zappa do
         partial = get_helper(helpers, tag.name)
 
         case partial do
-          {:ok, callback} -> parse(resolve_partial(callback, tag.options) <> tail, acc, helpers)
+          {:ok, callback} -> parse(resolve_partial(callback, tag.options) <> tail, acc, helpers, block_contexts)
           {:error, message} -> {:error, message}
         end
 
@@ -170,18 +194,18 @@ defmodule Zappa do
   end
 
   # Non-escaped tag
-  defp parse("{{{" <> tail, acc, helpers) do
+  defp parse("{{{" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail, "}}}")
     # TODO: check to see if there is a helper registered! ???
     case result do
       {:ok, %Tag{name: ""}, _tail} -> {:error, "Escaped tags require a name, e.g. {{{foo}}}"}
-      {:ok, tag, tail} -> parse(tail, acc <> "<%= #{tag.name} %>", helpers)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%= #{tag.name} %>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
 
   # Regular tag (HTML-escaped)
-  defp parse("{{" <> tail, acc, helpers) do
+  defp parse("{{" <> tail, acc, helpers, block_contexts) do
     result = accumulate_tag(tail)
     # TODO: check to see if there is a helper registered!
     case result do
@@ -189,7 +213,7 @@ defmodule Zappa do
         {:error, "Non-escaped tags require a name, e.g. {{foo}}"}
 
       {:ok, tag, tail} ->
-        parse(tail, acc <> "<%= HtmlEntities.encode(#{tag.name}) %>", helpers)
+        parse(tail, acc <> "<%= HtmlEntities.encode(#{tag.name}) %>", helpers, block_contexts)
 
       {:error, message} ->
         {:error, message}
@@ -198,7 +222,7 @@ defmodule Zappa do
 
   # Error: ending delimiter found
   # Try to include some information in the error message
-  defp parse("}}" <> tail, acc, _helpers) do
+  defp parse("}}" <> tail, acc, _helpers, _block_contexts) do
     cond do
       String.length(acc) > 32 ->
         <<first_chunk :: binary - size(32)>> <> _ = acc
@@ -209,8 +233,9 @@ defmodule Zappa do
     end
   end
 
-  defp parse(<<head :: binary - size(1)>> <> tail, acc, helpers),
-       do: parse(tail, acc <> head, helpers)
+  # Pass-thru: when we're not in a tag, the character at the head goes appended to the accumulator
+  defp parse(<<head :: binary - size(1)>> <> tail, acc, helpers, block_contexts),
+       do: parse(tail, acc <> head, helpers, block_contexts)
 
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
   @spec accumulate_tag(head, delimiter, accumulator) ::
@@ -296,9 +321,11 @@ defmodule Zappa do
   end
 
   defp resolve_helper(callback, options) do
+    callback.(options)
   end
 
-  defp resolve_block(callback, options) do
+  defp resolve_block(callback, tag, block_contents) do
+    callback.(tag, block_contents)
   end
 
   # TODO?  Or just rely on Map.put() ? Better to use this function if the struct becomes more complex
