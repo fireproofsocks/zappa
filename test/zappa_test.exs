@@ -1,10 +1,13 @@
 defmodule ZappaTest do
   use ExUnit.Case
+
+  alias Zappa.Helpers
+
   #  doctest Zappa
 
   # http://tryhandlebarsjs.com/
 
-  #  describe "handlebars2eex/1" do
+  #  describe "compile/1" do
   #    test "something" do
   #      template = "<p>{{ first }} {{last}}</p>"
   #      values = [first: "Bog", last: "Man"]
@@ -14,36 +17,37 @@ defmodule ZappaTest do
   describe "invalid syntax:" do
     test "closing tag precedes opening tag" do
       tpl = "this is a bad}} string"
-      assert {:error, _} = Zappa.handlebars2eex(tpl)
+      assert {:error, _} = Zappa.compile(tpl)
     end
 
     test "tags cannot appear inside one another" do
-      tpl = "{{opening {{ooops}}}} this is no good"
-      assert {:error, _} = Zappa.handlebars2eex(tpl)
+      tpl = "{{nested {{tags}}}} are no good"
+      assert {:error, _} = Zappa.compile(tpl)
     end
 
-    test "empty tags cause errors for certain types of tags" do
+    test "empty tags cause errors for partials" do
       tpl = "this is {{>}} no good"
-      assert {:error, _} = Zappa.handlebars2eex(tpl)
+      assert {:error, _} = Zappa.compile(tpl)
     end
 
     test "closing block not allowed" do
       tpl = "this is {{/my-block}} no good"
-      assert {:error, _} = Zappa.handlebars2eex(tpl)
+      assert {:error, _} = Zappa.compile(tpl)
     end
+
     #    test "attempts to hijack" do
     #      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
-    #      assert {:error, _} = Zappa.handlebars2eex(tpl)
+    #      assert {:error, _} = Zappa.compile(tpl)
     #    end
   end
 
-  describe "handlebars2eex/1" do
+  describe "compile/1" do
     test "do nothing when there are no tags" do
       input = ~s"""
       This is regular text with no handlebar tags in it at all
       """
 
-      assert {:ok, output} = Zappa.handlebars2eex(input)
+      assert {:ok, output} = Zappa.compile(input)
       assert input == output
     end
 
@@ -56,7 +60,7 @@ defmodule ZappaTest do
       Some  stuff
       """
 
-      assert {:ok, output} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} == Zappa.compile(tpl)
     end
 
     test "regular double braces (html escaped)" do
@@ -78,7 +82,7 @@ defmodule ZappaTest do
       </div>
       """
 
-      assert {:ok, output} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} == Zappa.compile(tpl)
     end
 
     test "triple braces (unescaped)" do
@@ -100,26 +104,39 @@ defmodule ZappaTest do
       </div>
       """
 
-      assert {:ok, output} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+
+    test "triple braces (unescaped) tags do not allow options" do
+      tpl = ~s"""
+        <h1>{{{title should "not" include "options"}}}</h1>
+      """
+
+      assert {:error, _} = Zappa.compile(tpl)
     end
 
     test "partial that has not been registered triggers error" do
       tpl = "{{> myPartial }}"
-      assert {:error, _} = Zappa.handlebars2eex(tpl)
+      assert {:error, _} = Zappa.compile(tpl)
     end
 
-    test "partial that has been registered is substituted in" do
+    test "partial string that has been registered is substituted in" do
       tpl = "{{> myPartial }}"
 
-      assert {:ok, "some text here"} =
-               Zappa.handlebars2eex(tpl, %{"myPartial" => "some text here"})
+      helpers =
+        Zappa.register_partial(%Helpers{}, "myPartial", {:ok, "hello {{thing}}"})
+
+#        assert true = Zappa.compile(tpl, helpers)
+      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
     end
 
-    test "partial that has been registered is substituted in and its tags parsed" do
+    test "partial callback that has been registered is substituted in and its tags parsed" do
       tpl = "{{> myPartial }}"
 
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} =
-               Zappa.handlebars2eex(tpl, %{"myPartial" => "hello {{thing}}"})
+      helpers =
+        Zappa.register_partial(%Helpers{}, "myPartial", fn _tag -> {:ok, "hello {{thing}}"} end)
+
+      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
     end
 
     test "comments with short tags" do
@@ -135,7 +152,7 @@ defmodule ZappaTest do
       </div>
       """
 
-      assert {:ok, output} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} == Zappa.compile(tpl)
     end
 
     test "comments with long tags" do
@@ -151,7 +168,7 @@ defmodule ZappaTest do
       </div>
       """
 
-      assert {:ok, output} == Zappa.handlebars2eex(tpl)
+      assert {:ok, output} == Zappa.compile(tpl)
     end
   end
 
@@ -345,5 +362,36 @@ defmodule ZappaTest do
   describe "@index" do
     # https://stackoverflow.com/questions/38841248/elixir-templates-looping-through-a-list-with-iterator-value
     # Enum.with_index
+  end
+
+  describe "default helper functions" do
+    test "else helper" do
+      tpl = ~s"""
+      <div class="entry">
+        {{else}}
+      </div>
+      """
+
+      output = ~s"""
+      <div class="entry">
+        <% else %>
+      </div>
+      """
+
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+  end
+
+  describe "register_helper/3" do
+    test "raises error when name is not binary or atom" do
+    end
+
+    test "regular " do
+      result =
+        Zappa.get_default_helpers()
+        |> Zappa.register_helper("all_caps", fn options -> String.upcase(options) end)
+
+      assert %Helpers{helpers: %{"all_caps" => _}} = result
+    end
   end
 end

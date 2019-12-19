@@ -2,14 +2,36 @@ defmodule Zappa do
   @moduledoc """
   This implementation relies on tail recursion (and not regular expressions).
   Zappa is a Handlebars to EEx [transpiler](https://en.wikipedia.org/wiki/Source-to-source_compiler).
+
+    Helpers:
+    functions receive a %Tag{} struct
+
+    Blocks:
+    functions receive a %Tag{} struct and the contents of the block
+
+    Partials:
+    functions receive a %Tag{} struct
+
+
+  Handlebar Tags:
+  ```
+  # {{ regular tag (html escaped)
+  # {{{ non-escaped tag
+  # {{! comment
+  # {{!-- comment --}}
+  # {{> partial
+  # {{# block
+  # {{{{raw-helper}}}}
+  ```
   """
-  alias Zappa.Tag
+  alias Zappa.{
+    Helpers,
+    Tag
+    }
+
   require Logger
 
-  # Types to help make the the specs and function documentation more clear.
-  @typedoc """
-  A [Handlebars.js](https://handlebarsjs.com/) template (as a string). [Try it](http://tryhandlebarsjs.com/)!
-  """
+  # A [Handlebars.js](https://handlebarsjs.com/) template (as a string). [Try it](http://tryhandlebarsjs.com/)!
   @typep handlebars_template :: String.t()
 
   @typep eex_template :: String.t()
@@ -23,34 +45,46 @@ defmodule Zappa do
   # Denotes a string used to collect
   @typep accumulator :: String.t()
 
-
+  # A list where the first item represents the block that is in context. This is used as the parser traverses down
+  # into nested blocks, e.g. {{if something}}{{if something_else}}some text{{/if}}{{/if}}
+  # It affects the validation of the closing tag (e.g. {{/if}}): a closing tag is only valid if it closes the current
+  # block context
   @typep block_contexts :: list()
+
+  @default_helpers %Zappa.Helpers{
+    helpers: %{
+      "else" => &Zappa.Helpers.Else.parse_else/1
+    },
+    block_helpers: %{
+      "if" => &Zappa.BlockHelpers.If.parse_if/2
+    },
+    partials: %{}
+  }
 
   @doc """
   Evaluate the handlebars string and return the result. (The name is borrowed the name from EEx.eval_string)
   """
   @spec eval_string(handlebars_template, list) :: String.t()
   def eval_string(handlebars_template, values_list) do
-    handlebars2eex(handlebars_template)
+    compile(handlebars_template)
     |> EEx.eval_string(values_list)
   end
 
+  @doc """
+  Optionally, you may wish to register and supply your own helper functions to augment or replace the defaults
+  available via `get_default_helpers/0`.
+  """
   @spec eval_string(handlebars_template, list, map) :: String.t()
   def eval_string(handlebars_template, values_list, helpers) do
-    handlebars2eex(handlebars_template, helpers)
+    compile(handlebars_template, helpers)
     |> EEx.eval_string(values_list)
   end
 
   @doc """
   Retrieve the default helpers supported
   """
-  @spec get_default_helpers() :: map
-  def get_default_helpers() do
-    %{
-      "if" => &Zappa.BlockHelpers.If.parse_if/0,
-      # "else"
-    }
-  end
+  @spec get_default_helpers() :: %Zappa.Helpers{}
+  def get_default_helpers, do: @default_helpers
 
   @doc """
   Compiles a handlebars template to EEx using the default helpers (if, with, unless, etc.).
@@ -60,19 +94,19 @@ defmodule Zappa do
   ## Examples
 
       iex> handlebars_template = "Hello {{thing}}"
-      iex> Zappa.handlebars2eex(handlebars_template)
+      iex> Zappa.compile(handlebars_template)
       "Hello <%= thing %>"
 
   """
-  @spec handlebars2eex(handlebars_template) :: {:ok, eex_template} | {:error, String.t()}
-  def handlebars2eex(template), do: handlebars2eex(template, get_default_helpers())
+  @spec compile(handlebars_template) :: {:ok, eex_template} | {:error, String.t()}
+  def compile(template), do: compile(template, get_default_helpers())
 
   @doc """
   Compiles a handlebars template to EEx using the helpers provided.
 
   """
-  @spec handlebars2eex(handlebars_template, map) :: {:ok, eex_template} | {:error, String.t()}
-  def handlebars2eex(template, helpers) do
+  @spec compile(handlebars_template, map) :: {:ok, eex_template} | {:error, String.t()}
+  def compile(template, helpers) do
     template
     |> strip_eex()
     |> parse("", helpers, [])
@@ -83,7 +117,6 @@ defmodule Zappa do
   # []  -- the root context
   # ["if"] -- we've entered into an if block
   # ["each", "if"] -- inside the if-block, there was an "each" block
-  # We've got to be able to juggle the accumulators according to their context... I think this will get handled automatically
   # defp parse("", acc, _helpers, block_context_list), do: {:ok, acc}
 
   # {{ regular tag (html escaped)
@@ -93,143 +126,220 @@ defmodule Zappa do
   # {{> partial
   # {{# block
   # {{{{raw-helper}}}}
-  @spec parse(handlebars_template, accumulator, map, block_contexts) :: {:ok, String.t()} | {:error, String.t()}
+  @spec parse(handlebars_template, accumulator, map, block_contexts) ::
+          {:ok, String.t()} | {:error, String.t()}
   # End of handlebars template! All done!
   defp parse("", acc, _helpers, []), do: {:ok, acc}
+
   defp parse("", acc, _helpers, [block | _]) do
     {:error, "Unexpected end of template.  Closing block not found: {{/#{block}}}"}
   end
 
+  ######################################################################################################################
   # Comment tag
   defp parse("{{!--" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail, "--}}")
-
-    case result do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+    with {:ok, tag, tail} <- accumulate_tag(tail, "--}}") do
+      parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+    else
       {:error, message} -> {:error, message}
     end
   end
 
+  ######################################################################################################################
   # Comment tag
   defp parse("{{!" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail)
-
-    case result do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+    with {:ok, tag, tail} <- accumulate_tag(tail) do
+      parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+    else
       {:error, message} -> {:error, message}
     end
   end
 
+  ######################################################################################################################
   # Block open
   defp parse("{{#" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail)
-    # Get name of block helper
-    # accumulate the block {{/block}}
-    #    block_name = "if"
-    #    helpers[block_name].()
-    case result do
-      {:ok, %Tag{name: ""}, _tail} ->
-        {:error, "Block tags require a name, e.g. {{#foo}}  {{/foo}}"}
-
-      {:ok, tag, tail} ->
-        partial = get_helper(helpers, tag.name)
-
-        case partial do
-          {:ok, callback} ->
-            # Reset the accumulator, push this block onto the context
-            block_result = parse(tail, "", helpers, [Tag.name | block_contexts])
-            case block_result do
-              # resolve_block(callback, tag, block_contents)
-              {:ok, block_output, tail, block_contexts} -> parse(tail, acc <> resolve_block(callback, tag, block_output), helpers, block_contexts)
-              {:error, message} -> {:error, message}
-            end
-
-          {:error, message} -> {:error, message}
-        end
-
-      {:error, message} ->
-        {:error, message}
+    with {:ok, tag, tail} <- accumulate_tag(tail),
+         :ok <- validate_opening_block_tag(tag),
+         {:ok, callback} <- get_block_helper(helpers, tag.name),
+         {:ok, content, tail, block_contexts} <- parse(tail, "", helpers, [tag.name | block_contexts]),
+         {:ok, content} <- call_block_helper_function(callback, tag, content) do
+      parse(tail, acc <> content, helpers, block_contexts)
+    else
+      {:error, error} -> {:error, error}
     end
   end
 
+  @spec validate_opening_block_tag(%Tag{}) :: {:error, String.t()}
+  defp validate_opening_block_tag(%Tag{name: ""}) do
+    {:error, "Opening block tags require a name, e.g. {{#foo}}"}
+  end
+
+  @spec validate_opening_block_tag(%Tag{}, String.t()) :: {:error, String.t()} | :ok
+  defp validate_opening_block_tag(tag, active_block) do
+    if tag.name != active_block do
+      {:error, "Unexpected closing block tag. Expected closing {{/#{active_block}}} tag."}
+    else
+      :ok
+    end
+  end
+
+  @spec get_block_helper(%Helpers{}, String.t) :: {:ok, function}
+  defp get_block_helper(%Helpers{block_helpers: block_helpers}, name) do
+    {
+      :ok,
+      Map.get(
+        block_helpers,
+        name,
+        fn (tag, _block_contents) -> {:error, "Block-helper not registered: #{tag.name}"} end
+      )
+    }
+  end
+
+  @spec call_helper_function(function, String.t()) :: {:ok, String.t()} | {:error, String.t}
+  defp call_helper_function(callback, options) do
+    callback.(options)
+  end
+
+  ######################################################################################################################
   # Block close. Blocks must close the tag that opened.
   defp parse("{{/" <> tail, acc, helpers, []) do
     {:error, "Unexpected closing block tag."}
   end
 
   defp parse("{{/" <> tail, acc, helpers, [active_block | block_contexts]) do
-    result = accumulate_tag(tail)
-
-    case result do
-      {:ok, tag, tail} ->
-        if tag.name != active_block do
-          {:error, "Unexpected closing block tag. Expected closing {{/#{active_block}}} tag."}
-        else
-          {:ok, acc, tail, block_contexts}
-        end
-      {:error, message} -> {:error, message}
+    with {:ok, tag, tail} <- accumulate_tag(tail),
+         :ok <- validate_closing_block_tag(tag, active_block) do
+      {:ok, acc, tail, block_contexts}
+    else
+      {:error, error} -> {:error, error}
     end
   end
 
+  @spec validate_closing_block_tag(%Tag{}, String.t()) :: {:error, String.t()}
+  defp validate_closing_block_tag(%Tag{name: ""}, _active_block) do
+    {:error, "Block closing tags require a name, e.g. {{/foo}}"}
+  end
 
+  @spec validate_closing_block_tag(%Tag{}, String.t()) :: {:error, String.t()} | :ok
+  defp validate_closing_block_tag(tag, active_block) do
+    if tag.name != active_block do
+      {:error, "Unexpected closing block tag. Expected closing {{/#{active_block}}} tag."}
+    else
+      :ok
+    end
+  end
+
+  ######################################################################################################################
   # Partial
   defp parse("{{>" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail)
-
-    case result do
-      {:ok, %Tag{name: ""}, _tail} ->
-        {:error, "Tags for partials require a name, e.g. {{>foo}}"}
-
-      {:ok, tag, tail} ->
-        partial = get_helper(helpers, tag.name)
-
-        case partial do
-          {:ok, callback} -> parse(resolve_partial(callback, tag.options) <> tail, acc, helpers, block_contexts)
-          {:error, message} -> {:error, message}
-        end
-
-      {:error, message} ->
-        {:error, message}
+    with {:ok, tag, tail} <- accumulate_tag(tail),
+         :ok <- validate_partial_tag(tag),
+         {:ok, callback} <- get_partial_helper(helpers, tag.name),
+         {:ok, unparsed_content} <- call_partial_function(callback, tag),
+         {:ok, parsed_content} <- parse(unparsed_content, "", helpers, block_contexts) do
+      parse(tail, acc <> parsed_content, helpers, block_contexts)
+    else
+      {:error, error} -> {:error, error}
     end
   end
 
+  @spec validate_partial_tag(%Tag{}) :: {:error, String.t()}
+  defp validate_partial_tag(%Tag{name: ""}) do
+    {:error, "Partial tags require a name, e.g. {{>foo}}"}
+  end
+
+  @spec validate_partial_tag(%Tag{}) :: :ok
+  defp validate_partial_tag(tag), do: :ok
+
+  @spec get_partial_helper(%Helpers{}, String.t) :: {:ok, function}
+  defp get_partial_helper(%Helpers{partials: partial_helpers}, name) do
+    {
+      :ok,
+      Map.get(
+        partial_helpers,
+        name,
+        fn (tag) -> {:error, "Partial not registered: #{tag.name}"} end
+      )
+    }
+  end
+
+  @spec call_partial_function(String.t(), %Tag{}) :: {:ok, String.t()} | {:error, String.t}
+  defp call_partial_function(callback, tag) when is_function(callback) do
+    callback.(tag)
+  end
+  defp call_partial_function(callback, _tag) do
+    callback
+  end
+
+  ######################################################################################################################
   # Non-escaped tag
   defp parse("{{{" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail, "}}}")
-    # TODO: check to see if there is a helper registered! ???
-    case result do
-      {:ok, %Tag{name: ""}, _tail} -> {:error, "Escaped tags require a name, e.g. {{{foo}}}"}
-      {:ok, tag, tail} -> parse(tail, acc <> "<%= #{tag.name} %>", helpers, block_contexts)
-      {:error, message} -> {:error, message}
+    with {:ok, tag, tail} <- accumulate_tag(tail, "}}}"),
+         :ok <- validate_non_escaped_tag(tag),
+         {:ok, contents} <- render_non_escaped_tag(tag, helpers) do
+      parse(tail, acc <> contents, helpers, block_contexts)
+    else
+      {:error, error} -> {:error, error}
     end
   end
 
+  @spec validate_non_escaped_tag(%Tag{}) :: {:error, String.t()}
+  defp validate_non_escaped_tag(%Tag{name: ""}) do
+    {:error, "Non-escaped tags require a name, e.g. {{{foo}}}"}
+  end
+
+  @spec validate_non_escaped_tag(%Tag{}) :: :ok
+  defp validate_non_escaped_tag(%Tag{options: ""} = tag), do: :ok
+
+  @spec validate_non_escaped_tag(%Tag{}) :: {:error, String.t()}
+  defp validate_non_escaped_tag(_tag) do
+    {:error, "Non-escaped tags should not include options"}
+  end
+
+  @spec render_non_escaped_tag(%Tag{}, %Helpers{}) :: {:ok, accumulator} | {:error, String.t()}
+  defp render_non_escaped_tag(tag, _helpers) do
+    {:ok, "<%= #{tag.name} %>"}
+  end
+
+  ######################################################################################################################
   # Regular tag (HTML-escaped)
-  defp parse("{{" <> tail, acc, helpers, block_contexts) do
-    result = accumulate_tag(tail)
-    # TODO: check to see if there is a helper registered!
-    case result do
-      {:ok, %Tag{name: ""}, _tail} ->
-        {:error, "Non-escaped tags require a name, e.g. {{foo}}"}
-
-      {:ok, tag, tail} ->
-        parse(tail, acc <> "<%= HtmlEntities.encode(#{tag.name}) %>", helpers, block_contexts)
-
-      {:error, message} ->
-        {:error, message}
+  defp parse("{{" <> tail, acc, %Helpers{helpers: helper_map} = helpers, block_contexts) do
+    with {:ok, tag, tail} <- accumulate_tag(tail),
+         :ok <- validate_regular_tag(tag),
+         {:ok, contents} <- render_regular_tag(tag, helpers) do
+      parse(tail, acc <> contents, helpers, block_contexts)
+    else
+      {:error, error} -> {:error, error}
     end
   end
 
+  @spec validate_regular_tag(%Tag{}) :: {:error, String.t()}
+  defp validate_regular_tag(%Tag{name: ""}) do
+    {:error, "Regular tags require a name, e.g. {{foo}}"}
+  end
+
+  @spec validate_regular_tag(%Tag{}) :: atom
+  defp validate_regular_tag(tag), do: :ok
+
+  @spec render_regular_tag(%Tag{}, %Helpers{}) :: {:ok, accumulator} | {:error, String.t()}
+  defp render_regular_tag(tag, %Helpers{helpers: helper_map} = helpers) do
+    case Map.get(helper_map, tag.name) do
+      # TODO: regular tag should have no options
+      nil -> {:ok, "<%= HtmlEntities.encode(#{tag.name}) %>"}
+      callback -> call_helper_function(callback, tag.options)
+    end
+  end
+
+  ######################################################################################################################
   # Error: ending delimiter found
   # Try to include some information in the error message
+  @spec parse(head, accumulator, %Helpers{}, String.t()) :: {:error, String.t()}
   defp parse("}}" <> tail, acc, _helpers, _block_contexts) do
-    cond do
-      String.length(acc) > 32 ->
-        <<first_chunk :: binary - size(32)>> <> _ = acc
-        {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
-
-      true ->
-        {:error, "Unexpected closing delimiter: }}"}
+    if String.length(acc) > 32 do
+      <<first_chunk :: binary - size(32)>> <> _ = acc
+      {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
+    else
+      {:error, "Unexpected closing delimiter: }}"}
     end
   end
 
@@ -237,9 +347,10 @@ defmodule Zappa do
   defp parse(<<head :: binary - size(1)>> <> tail, acc, helpers, block_contexts),
        do: parse(tail, acc <> head, helpers, block_contexts)
 
+  ######################################################################################################################
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
-  @spec accumulate_tag(head, delimiter, accumulator) ::
-          {:error, String.t()} | {:ok, %Tag{}, tail}
+  ######################################################################################################################
+  @spec accumulate_tag(head, delimiter, accumulator) :: {:error, String.t()} | {:ok, %Tag{}, tail}
   defp accumulate_tag(head, ending_delimiter \\ "}}", tag_acc \\ "")
   defp accumulate_tag("", _ending_delimiter, _tag_acc), do: {:error, "Unclosed tag."}
 
@@ -301,7 +412,6 @@ defmodule Zappa do
     |> Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
   end
 
-  # TODO: namespaces for helpers vs. block-helpers vs. partials?
   @spec get_helper(map, String.t()) :: function()
   defp get_helper(helpers, partial) do
     case Map.has_key?(helpers, partial) do
@@ -310,26 +420,44 @@ defmodule Zappa do
     end
   end
 
-  @spec resolve_partial(function, String.t()) :: String.t()
-  defp resolve_partial(callback, options) when is_function(callback) do
-    callback.(options)
-  end
-
-  @spec resolve_partial(String.t(), String.t()) :: String.t()
-  defp resolve_partial(callback, options) when is_binary(callback) do
-    callback
-  end
-
-  defp resolve_helper(callback, options) do
-    callback.(options)
-  end
-
-  defp resolve_block(callback, tag, block_contents) do
+  @spec call_block_helper_function(function, %Tag{}, String.t) :: {:ok, String.t()} | {:error, String.t}
+  defp call_block_helper_function(callback, tag, block_contents) do
     callback.(tag, block_contents)
   end
 
-  # TODO?  Or just rely on Map.put() ? Better to use this function if the struct becomes more complex
-  #  def register_helper(helpers, name, callback) do
-  #    helpers
-  #  end
+  @doc """
+  This is a convenience function that adds your helper callback to the %Zappa.Helpers{} struct.
+  The callback function provided should take one argument representing the options included with the tag.
+
+  ## Examples
+      iex> helpers = Zappa.get_default_helpers()
+        |> Zappa.register_helper("all_caps", fn(options) -> String.upcase(options) end)
+
+  Then you would call your function in a template like this:
+  ```
+  <p>Here is my variable: {{all_caps my_var}}</p>
+  ```
+
+  """
+  # TODO: helper names must not being with ./ etc.
+  # See https://elixirforum.com/t/using-put-in-for-structs/27645
+  @spec register_helper(%Helpers{}, String.t(), function) :: %Helpers{}
+  def register_helper(helpers, name, callback), do: put_in(helpers.helpers[name], callback)
+
+  @doc """
+  This is a convenience function that adds your block helper callback to the %Zappa.Helpers{} struct.
+  """
+  @spec register_block(%Helpers{}, String.t(), function) :: %Helpers{}
+  def register_block(helpers, name, callback), do: put_in(helpers.block_helpers[name], callback)
+
+  @doc """
+  This is a convenience function that adds your helper callback to the %Zappa.Helpers{} struct.
+  """
+  @spec register_partial(%Helpers{}, String.t(), function) :: %Helpers{}
+  def register_partial(helpers, name, callback), do: put_in(helpers.partials[name], callback)
+
+  #      {:ok, %Tag{name: ""}, _tail} ->
+  #        {:error, "Non-escaped tags require a name, e.g. {{foo}}"}
+  #
+  #      {:ok, tag, tail} ->
 end
