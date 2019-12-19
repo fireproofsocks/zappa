@@ -1,8 +1,8 @@
 # Zappa
 
-Handlebars templates in Elixir (WORK IN PROGRESS...)
+Handlebars templates in Elixir (still in dev, but now minimally functional!)
 
-Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/) templating language that works by converting handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  Handlebars builds on the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) by adding in some logic and functions to the templates.  Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconoclastic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
+Zappa is an Elixir implementation of the [Handlebars](https://handlebarsjs.com/) templating language that works by converting handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  Handlebars builds on the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) by adding in some logic and functions to the templates.  Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
 
 The specific use case that drove development of Zappa was to provide _untrusted users_ the ability to create and edit simplified templates. EEx templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and Mustache lacked the features that were required in these templates.
 
@@ -10,7 +10,7 @@ See [Handlebars Documentation](https://devdocs.io/handlebars/)
 
 ## Similar Packages
 
-If you don't need the logic that Handlebars templates have, then you can have a look at these Mustache implementations:
+If you don't need the logic that Handlebars templates have, then you can have a look at these Elixir Mustache implementations:
 
 - [mustache](https://hex.pm/packages/mustache)
 - [bbmustache](https://hex.pm/packages/bbmustache)
@@ -46,15 +46,23 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
 ## Features
 
-x comments
-each (arrays)
-each (objects)
-if
-unless
-with
-x partials
-@index
-raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
+- comments
+- if blocks
+- unless blocks
+- log helper
+- partials
+- each (arrays)
+
+## TODO:
+
+- each (objects)
+- @index
+- raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
 `{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
-Literals (in helpers) e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}`
-helpers e.g. `{{link home}}` where `home` is an object with a `url` and `title` property 
+- arguments in helpers e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}` or `{{#each users as |user userId|}}`
+
+## Not Implemented
+
+These ones probably will not be implemented because they are too tightly coupled to the input data:
+- [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default_regular_tag_handler
+- [lookup](https://handlebarsjs.com/guide/builtin-helpers.html#lookup)

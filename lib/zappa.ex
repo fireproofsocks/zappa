@@ -27,7 +27,7 @@ defmodule Zappa do
   alias Zappa.{
     Helpers,
     Tag
-    }
+  }
 
   require Logger
 
@@ -51,12 +51,18 @@ defmodule Zappa do
   # block context
   @typep block_contexts :: list()
 
+  @default_helper_callback &Zappa.Helpers.Default.parse_default/1
+
   @default_helpers %Zappa.Helpers{
     helpers: %{
-      "else" => &Zappa.Helpers.Else.parse_else/1
+      "else" => &Zappa.Helpers.Else.parse_else/1,
+      "log" => &Zappa.Helpers.Log.parse_log/1,
+      "__default__" => &Zappa.Helpers.Default.parse_default/1
     },
     block_helpers: %{
-      "if" => &Zappa.BlockHelpers.If.parse_if/2
+      "if" => &Zappa.BlockHelpers.If.parse_if/1,
+      "each" => &Zappa.BlockHelpers.Each.parse_each/1,
+      "unless" => &Zappa.BlockHelpers.Unless.parse_unless/1
     },
     partials: %{}
   }
@@ -138,9 +144,8 @@ defmodule Zappa do
   ######################################################################################################################
   # Comment tag
   defp parse("{{!--" <> tail, acc, helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "--}}") do
-      parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
-    else
+    case accumulate_tag(tail, "--}}") do
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
@@ -148,9 +153,8 @@ defmodule Zappa do
   ######################################################################################################################
   # Comment tag
   defp parse("{{!" <> tail, acc, helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail) do
-      parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
-    else
+    case accumulate_tag(tail) do
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
@@ -161,8 +165,9 @@ defmodule Zappa do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_opening_block_tag(tag),
          {:ok, callback} <- get_block_helper(helpers, tag.name),
-         {:ok, content, tail, block_contexts} <- parse(tail, "", helpers, [tag.name | block_contexts]),
-         {:ok, content} <- call_block_helper_function(callback, tag, content) do
+         {:ok, block_content, tail, block_contexts} <-
+           parse(tail, "", helpers, [tag.name | block_contexts]),
+         {:ok, content} <- call_function(callback, Map.put(tag, :block_contents, block_content)) do
       parse(tail, acc <> content, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
@@ -174,30 +179,19 @@ defmodule Zappa do
     {:error, "Opening block tags require a name, e.g. {{#foo}}"}
   end
 
-  @spec validate_opening_block_tag(%Tag{}, String.t()) :: {:error, String.t()} | :ok
-  defp validate_opening_block_tag(tag, active_block) do
-    if tag.name != active_block do
-      {:error, "Unexpected closing block tag. Expected closing {{/#{active_block}}} tag."}
-    else
-      :ok
-    end
-  end
+  @spec validate_opening_block_tag(%Tag{}) :: {:error, String.t()} | :ok
+  defp validate_opening_block_tag(tag), do: :ok
 
-  @spec get_block_helper(%Helpers{}, String.t) :: {:ok, function}
+  @spec get_block_helper(%Helpers{}, String.t()) :: {:ok, function}
   defp get_block_helper(%Helpers{block_helpers: block_helpers}, name) do
     {
       :ok,
       Map.get(
         block_helpers,
         name,
-        fn (tag, _block_contents) -> {:error, "Block-helper not registered: #{tag.name}"} end
+        fn tag -> {:error, "Block-helper not registered: #{tag.name}"} end
       )
     }
-  end
-
-  @spec call_helper_function(function, String.t()) :: {:ok, String.t()} | {:error, String.t}
-  defp call_helper_function(callback, options) do
-    callback.(options)
   end
 
   ######################################################################################################################
@@ -235,7 +229,7 @@ defmodule Zappa do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_partial_tag(tag),
          {:ok, callback} <- get_partial_helper(helpers, tag.name),
-         {:ok, unparsed_content} <- call_partial_function(callback, tag),
+         {:ok, unparsed_content} <- call_function(callback, tag),
          {:ok, parsed_content} <- parse(unparsed_content, "", helpers, block_contexts) do
       parse(tail, acc <> parsed_content, helpers, block_contexts)
     else
@@ -251,24 +245,20 @@ defmodule Zappa do
   @spec validate_partial_tag(%Tag{}) :: :ok
   defp validate_partial_tag(tag), do: :ok
 
-  @spec get_partial_helper(%Helpers{}, String.t) :: {:ok, function}
+  # Wraps the output in a function if only a string was registered
+  @spec get_partial_helper(%Helpers{}, String.t()) :: {:ok, function}
   defp get_partial_helper(%Helpers{partials: partial_helpers}, name) do
-    {
-      :ok,
+    handler =
       Map.get(
         partial_helpers,
         name,
-        fn (tag) -> {:error, "Partial not registered: #{tag.name}"} end
+        fn tag -> {:error, "Partial not registered: #{tag.name}"} end
       )
-    }
-  end
 
-  @spec call_partial_function(String.t(), %Tag{}) :: {:ok, String.t()} | {:error, String.t}
-  defp call_partial_function(callback, tag) when is_function(callback) do
-    callback.(tag)
-  end
-  defp call_partial_function(callback, _tag) do
-    callback
+    case handler do
+      handler when is_function(handler) -> {:ok, handler}
+      handler -> {:ok, fn _ -> handler end}
+    end
   end
 
   ######################################################################################################################
@@ -306,7 +296,8 @@ defmodule Zappa do
   defp parse("{{" <> tail, acc, %Helpers{helpers: helper_map} = helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_regular_tag(tag),
-         {:ok, contents} <- render_regular_tag(tag, helpers) do
+         {:ok, function} <- get_helper(helpers, tag.name),
+         {:ok, contents} <- call_function(function, tag) do
       parse(tail, acc <> contents, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
@@ -321,13 +312,21 @@ defmodule Zappa do
   @spec validate_regular_tag(%Tag{}) :: atom
   defp validate_regular_tag(tag), do: :ok
 
-  @spec render_regular_tag(%Tag{}, %Helpers{}) :: {:ok, accumulator} | {:error, String.t()}
-  defp render_regular_tag(tag, %Helpers{helpers: helper_map} = helpers) do
-    case Map.get(helper_map, tag.name) do
-      # TODO: regular tag should have no options
-      nil -> {:ok, "<%= HtmlEntities.encode(#{tag.name}) %>"}
-      callback -> call_helper_function(callback, tag.options)
-    end
+  # This getter is constructed so that one may override the default functionality, but it will always fall back to it.
+  @spec get_helper(%Helpers{}, String.t()) :: {:ok, function}
+  defp get_helper(%Helpers{helpers: helpers_map}, name) do
+    {
+      :ok,
+      Map.get(
+        helpers_map,
+        name,
+        Map.get(
+          helpers_map,
+          "__default__",
+          @default_helper_callback
+        )
+      )
+    }
   end
 
   ######################################################################################################################
@@ -336,7 +335,7 @@ defmodule Zappa do
   @spec parse(head, accumulator, %Helpers{}, String.t()) :: {:error, String.t()}
   defp parse("}}" <> tail, acc, _helpers, _block_contexts) do
     if String.length(acc) > 32 do
-      <<first_chunk :: binary - size(32)>> <> _ = acc
+      <<first_chunk::binary-size(32)>> <> _ = acc
       {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
     else
       {:error, "Unexpected closing delimiter: }}"}
@@ -344,8 +343,8 @@ defmodule Zappa do
   end
 
   # Pass-thru: when we're not in a tag, the character at the head goes appended to the accumulator
-  defp parse(<<head :: binary - size(1)>> <> tail, acc, helpers, block_contexts),
-       do: parse(tail, acc <> head, helpers, block_contexts)
+  defp parse(<<head::binary-size(1)>> <> tail, acc, helpers, block_contexts),
+    do: parse(tail, acc <> head, helpers, block_contexts)
 
   ######################################################################################################################
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
@@ -354,17 +353,17 @@ defmodule Zappa do
   defp accumulate_tag(head, ending_delimiter \\ "}}", tag_acc \\ "")
   defp accumulate_tag("", _ending_delimiter, _tag_acc), do: {:error, "Unclosed tag."}
 
-  defp accumulate_tag(<<h :: binary - size(4), tail :: binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h::binary-size(4), tail::binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
 
-  defp accumulate_tag(<<h :: binary - size(3), tail :: binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h::binary-size(3), tail::binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
 
-  defp accumulate_tag(<<h :: binary - size(2), tail :: binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h::binary-size(2), tail::binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
@@ -373,7 +372,7 @@ defmodule Zappa do
     {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
   end
 
-  defp accumulate_tag(<<head :: binary - size(1)>> <> tail, delimiter, tag_acc) do
+  defp accumulate_tag(<<head::binary-size(1)>> <> tail, delimiter, tag_acc) do
     accumulate_tag(tail, delimiter, tag_acc <> head)
   end
 
@@ -412,19 +411,6 @@ defmodule Zappa do
     |> Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
   end
 
-  @spec get_helper(map, String.t()) :: function()
-  defp get_helper(helpers, partial) do
-    case Map.has_key?(helpers, partial) do
-      true -> {:ok, Map.get(helpers, partial)}
-      false -> {:error, "Unregistered helper: #{partial}"}
-    end
-  end
-
-  @spec call_block_helper_function(function, %Tag{}, String.t) :: {:ok, String.t()} | {:error, String.t}
-  defp call_block_helper_function(callback, tag, block_contents) do
-    callback.(tag, block_contents)
-  end
-
   @doc """
   This is a convenience function that adds your helper callback to the %Zappa.Helpers{} struct.
   The callback function provided should take one argument representing the options included with the tag.
@@ -456,8 +442,28 @@ defmodule Zappa do
   @spec register_partial(%Helpers{}, String.t(), function) :: %Helpers{}
   def register_partial(helpers, name, callback), do: put_in(helpers.partials[name], callback)
 
-  #      {:ok, %Tag{name: ""}, _tail} ->
-  #        {:error, "Non-escaped tags require a name, e.g. {{foo}}"}
-  #
-  #      {:ok, tag, tail} ->
+  @spec call_function(function, %Tag{}) :: {:ok, String.t()} | {:error, String.t()}
+  defp call_function(callback, tag) do
+    callback.(tag)
+    |> handle_function_output()
+  end
+
+  # Because user-registered functions may return a simple string instead of a tuple
+  @spec handle_function_output(any) :: {:ok, String.t()} | {:error, String.t()}
+  defp handle_function_output(output) do
+    case output do
+      {:ok, output} ->
+        {:ok, output}
+
+      {:error, error} ->
+        {:error, error}
+
+      string when is_binary(string) ->
+        {:ok, string}
+
+      _ ->
+        {:error,
+         "Invalid function output. Registered helper function output must be {:ok, String.t()} | {:error, String.t} | String.t"}
+    end
+  end
 end

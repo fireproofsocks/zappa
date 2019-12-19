@@ -30,7 +30,7 @@ defmodule ZappaTest do
       assert {:error, _} = Zappa.compile(tpl)
     end
 
-    test "closing block not allowed" do
+    test "unexpected closing block not allowed" do
       tpl = "this is {{/my-block}} no good"
       assert {:error, _} = Zappa.compile(tpl)
     end
@@ -62,8 +62,10 @@ defmodule ZappaTest do
 
       assert {:ok, output} == Zappa.compile(tpl)
     end
+  end
 
-    test "regular double braces (html escaped)" do
+  describe "regular {{tags}}" do
+    test "multiple tags get parsed" do
       tpl = ~s"""
       <div class="entry">
         <h1>{{title}}</h1>
@@ -85,6 +87,72 @@ defmodule ZappaTest do
       assert {:ok, output} == Zappa.compile(tpl)
     end
 
+    test "regular tags should not allow tag options (when no helper is registered)" do
+      tpl = "<h1>{{title options not allowed}}</h1>"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "helper functions do allow options" do
+      tpl = "<h1>{{hello_x world}}</h1>"
+
+      helpers =
+        Zappa.get_default_helpers()
+        |> Zappa.register_helper("hello_x", fn tag -> {:ok, "Hello #{tag.options}"} end)
+
+      output = "<h1>Hello world</h1>"
+
+      assert {:ok, output} == Zappa.compile(tpl, helpers)
+    end
+
+    test "helper functions may return a simple string" do
+      tpl = "<h1>{{my_func}}</h1>"
+
+      helpers =
+        Zappa.get_default_helpers()
+        |> Zappa.register_helper("my_func", fn _tag -> "Hello world" end)
+
+      assert {:ok, "<h1>Hello world</h1>"} == Zappa.compile(tpl, helpers)
+    end
+
+    test "built-in else helper" do
+      tpl = ~s"""
+      <div class="entry">
+        {{else}}
+      </div>
+      """
+
+      output = ~s"""
+      <div class="entry">
+        <% else %>
+      </div>
+      """
+
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+
+    test "built-in else helper does not allow options" do
+      tpl = ~s"""
+      <div class="entry">
+        {{else options not allowed}}
+      </div>
+      """
+
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "built-in log helper" do
+      tpl = ~s({{log "something happened"}})
+      output = ~s(<% Logger.info\("something happened"\) %>)
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+
+    test "built-in log helper requires options" do
+      tpl = ~s({{log}})
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+  end
+
+  describe "non-escaped {{{tags}}" do
     test "triple braces (unescaped)" do
       tpl = ~s"""
       <div class="entry">
@@ -114,31 +182,9 @@ defmodule ZappaTest do
 
       assert {:error, _} = Zappa.compile(tpl)
     end
+  end
 
-    test "partial that has not been registered triggers error" do
-      tpl = "{{> myPartial }}"
-      assert {:error, _} = Zappa.compile(tpl)
-    end
-
-    test "partial string that has been registered is substituted in" do
-      tpl = "{{> myPartial }}"
-
-      helpers =
-        Zappa.register_partial(%Helpers{}, "myPartial", {:ok, "hello {{thing}}"})
-
-#        assert true = Zappa.compile(tpl, helpers)
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
-    end
-
-    test "partial callback that has been registered is substituted in and its tags parsed" do
-      tpl = "{{> myPartial }}"
-
-      helpers =
-        Zappa.register_partial(%Helpers{}, "myPartial", fn _tag -> {:ok, "hello {{thing}}"} end)
-
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
-    end
-
+  describe "comment {{!tags}}" do
     test "comments with short tags" do
       tpl = ~s"""
       <div class="entry">
@@ -172,99 +218,85 @@ defmodule ZappaTest do
     end
   end
 
-  describe "if-statements" do
-    @tag :skip
-    test "if-else-statement" do
-      tpl = ~s"""
-      <div class="entry">
-        {{#if author}}
-          <h1>{{firstName}} {{lastName}}</h1>
-        {{else}}
-          <h1>Unknown Author</h1>
-        {{/if}}
-      </div>
-      """
+  describe "partial {{>tags}}" do
+    test "partial that has not been registered triggers error" do
+      tpl = "{{> myPartial }}"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
 
-      output = ~s"""
-        <div class="entry">
-          <%= if author %>
-            <h1><%= firstName %> <%= lastName %></h1>
-          <% else %>
-            <h1>Unknown Author</h1>
-          <% end %>
-        </div>
-      """
+    test "partial callback that has been registered is substituted in and its tags parsed" do
+      tpl = "{{> myPartial }}"
+
+      helpers =
+        Zappa.register_partial(%Helpers{}, "myPartial", fn _tag -> {:ok, "hello {{thing}}"} end)
+
+      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
+    end
+
+    test "partial string that has been registered is substituted in" do
+      tpl = "{{> myPartial }}"
+
+      helpers = Zappa.register_partial(%Helpers{}, "myPartial", "hello {{thing}}")
+
+      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
     end
   end
 
-  describe "unless statement" do
-  end
+  describe "block {{#tags}}" do
+    test "if: else statement" do
+      tpl = "{{#if author}}<h1>{{name}}</h1>{{else}}<h1>Unknown Author</h1>{{/if}}"
 
-  describe "with statement" do
-    @tag :skip
-    test "something with" do
+      output =
+        "<%= if author %><h1><%= HtmlEntities.encode(name) %></h1><% else %><h1>Unknown Author</h1><% end %>"
+
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+
+    test "if: statement requires options" do
+      tpl = "{{#if}}<h1>{{name}}</h1>{{else}}<h1>Unknown Author</h1>{{/if}}"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "unless: else statement" do
+      tpl = "{{#unless author}}<h1>Unknown Author</h1>{{else}}<h1>{{name}}</h1>{{/unless}}"
+
+      output =
+        "<%= unless author %><h1>Unknown Author</h1><% else %><h1><%= HtmlEntities.encode(name) %></h1><% end %>"
+
+      assert {:ok, output} == Zappa.compile(tpl)
+    end
+
+    test "each: regular list" do
       tpl = ~s"""
-      <div class="entry">
-      {{#with story}}
-        <div class="intro">{{intro}}</div>
-        <div class="body">{{body}}</div>
-      {{/with}}
-      </div>
+      <ul class="people_list">
+      {{#each people}}
+      <li>{{this}}</li>
+      {{/each}}
+      </ul>
       """
 
-      # ????? problems with atom vs string keys?
-      output = ~s"""
-        <div class="entry">
-          <div class="intro"><%= story["intro"] %></div>
-          <div class="body"><%= story["body"] %></div>
-      </div>
+      expected = ~s"""
+      <ul class="people_list">
+      <%= for this <- people do %>
+      <li><%= HtmlEntities.encode(this) %></li>
+      <% end %>
+      </ul>
       """
+
+      {:ok, actual} = Zappa.compile(tpl)
+
+      actual = strip_whitespace(actual)
+      expected = strip_whitespace(expected)
+
+      assert actual == expected
     end
   end
 
   describe "each loop" do
-    @tag :skip
-    test "regular list" do
-      tpl = ~s"""
-      <ul class="people_list">
-      {{#each people}}
-      <li>{{this}}</li>
-      {{/each}}
-      </ul>
-      """
-
-      output = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= this %></li>
-      <% end %>
-      </ul>
-      """
-    end
-
-    @tag :skip
-    test "list with as" do
-      tpl = ~s"""
-      <ul class="people_list">
-      {{#each people}}
-      <li>{{this}}</li>
-      {{/each}}
-      </ul>
-      """
-
-      output = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= this %></li>
-      <% end %>
-      </ul>
-      """
-    end
-
     # https://stackoverflow.com/questions/39937948/loop-through-a-maps-key-value-pairs
     @tag :skip
     test "list with block parameters (value only)" do
-      tpl = ~s"""
+      _tpl = ~s"""
       <ul class="people_list">
       {{#each people as |p|}}
       <li>{{p}}</li>
@@ -272,7 +304,7 @@ defmodule ZappaTest do
       </ul>
       """
 
-      output = ~s"""
+      _output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
       <li><%= this %></li>
@@ -283,7 +315,7 @@ defmodule ZappaTest do
 
     @tag :skip
     test "list with block parameters (using as)" do
-      tpl = ~s"""
+      _tpl = ~s"""
       <ul class="people_list">
       {{#each people as |value key|}}
       <li>{{key}}.{{value}}</li>
@@ -291,7 +323,7 @@ defmodule ZappaTest do
       </ul>
       """
 
-      output = ~s"""
+      _output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
       <li><%= this %></li>
@@ -302,7 +334,7 @@ defmodule ZappaTest do
 
     @tag :skip
     test "list with else" do
-      tpl = ~s"""
+      _tpl = ~s"""
       <ul class="people_list">
       {{#each people}}
       <li>{{this}}</li>
@@ -312,7 +344,7 @@ defmodule ZappaTest do
       </ul>
       """
 
-      output = ~s"""
+      _output = ~s"""
       <ul class="people_list">
       <%= for this <- people do %>
       <li><%= this %></li>
@@ -328,7 +360,7 @@ defmodule ZappaTest do
     @tag :skip
     test "Enum.each that works with either a list or a map" do
       # Both of these work
-      m = %{a: "apple", b: "boy", c: "cat"}
+      _m = %{a: "apple", b: "boy", c: "cat"}
       m = ["apple", "boy", "cat"]
 
       Enum.each(
@@ -393,5 +425,11 @@ defmodule ZappaTest do
 
       assert %Helpers{helpers: %{"all_caps" => _}} = result
     end
+  end
+
+  defp strip_whitespace(str) do
+    String.replace(str, ~r/\n/, " ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 end
