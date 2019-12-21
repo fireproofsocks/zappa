@@ -1,10 +1,16 @@
 defmodule Zappa.Helpers do
   @moduledoc """
-  This struct is a map containing the following keys:
+  This struct contains maps that define various types of callback functions. The functions housed in this struct are
+  what give Zappa its power. An instance of this struct can be passed to `Zappa.compile/2`.
 
-  :helpers - callbacks used simple {{tags}}. The
-  :block_helpers - These functions receive a %Zappa.Tag{} struct and a string representing the contents of the block.
-  :partials - callbacks used to resolve "partials" tags, e.g. {{>example}}. These functions receive no arguments.
+  Some functions are registered by default: see `Zappa.get_default_helpers/0`; the default helpers are used when
+  `Zappa.compile/1` is called.
+
+  The keys in this struct are the following:
+
+  - `:helpers` - contains a map of callbacks used by simple tags, e.g. `{{foo}}`. See `Zappa.register_helper/3`.
+  - `:block_helpers` - contains a map of callbacks used by block tags, e.g. `{{#foo}}...{{/foo}}`. See `Zappa.register_block/3`.
+  - `:partials` - callbacks used to resolve "partials" tags, e.g. `{{>example}}`. See `Zappa.register_partial/3`.
   """
 
   defstruct helpers: %{},

@@ -1,7 +1,6 @@
 defmodule Zappa.Helpers.Default do
-  @moduledoc """
-  This is the default helper, used to render simple `{{tags}}`.
-  """
+  @moduledoc false
+  # This is the default helper, used to render simple `{{tags}}`.
 
   alias Zappa.Tag
 

@@ -1,7 +1,8 @@
 defmodule ZappaTest do
-  use ExUnit.Case
 
-  alias Zappa.Helpers
+  use Zappa.TestCase
+
+#  alias Zappa.Helpers
 
   #  doctest Zappa
 
@@ -425,11 +426,5 @@ defmodule ZappaTest do
 
       assert %Helpers{helpers: %{"all_caps" => _}} = result
     end
-  end
-
-  defp strip_whitespace(str) do
-    String.replace(str, ~r/\n/, " ")
-    |> String.replace(~r/\s+/, " ")
-    |> String.trim()
   end
 end

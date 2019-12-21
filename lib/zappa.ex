@@ -4,13 +4,13 @@ defmodule Zappa do
   Zappa is a Handlebars to EEx [transpiler](https://en.wikipedia.org/wiki/Source-to-source_compiler).
 
     Helpers:
-    functions receive a %Tag{} struct
+    functions receive a `%Zappa.Tag{}` struct
 
     Blocks:
-    functions receive a %Tag{} struct and the contents of the block
+    functions receive a `%Zappa.Tag{}` struct and the contents of the block
 
     Partials:
-    functions receive a %Tag{} struct
+    functions receive a `%Zappa.Tag{}` struct
 
 
   Handlebar Tags:
@@ -99,9 +99,9 @@ defmodule Zappa do
 
   ## Examples
 
-      iex> handlebars_template = "Hello {{thing}}"
+      iex> handlebars_template = "Hello {{{thing}}}"
       iex> Zappa.compile(handlebars_template)
-      "Hello <%= thing %>"
+      {:ok, "Hello <%= thing %>"}
 
   """
   @spec compile(handlebars_template) :: {:ok, eex_template} | {:error, String.t()}
@@ -137,7 +137,7 @@ defmodule Zappa do
   # End of handlebars template! All done!
   defp parse("", acc, _helpers, []), do: {:ok, acc}
 
-  defp parse("", acc, _helpers, [block | _]) do
+  defp parse("", _acc, _helpers, [block | _]) do
     {:error, "Unexpected end of template.  Closing block not found: {{/#{block}}}"}
   end
 
@@ -180,7 +180,7 @@ defmodule Zappa do
   end
 
   @spec validate_opening_block_tag(%Tag{}) :: {:error, String.t()} | :ok
-  defp validate_opening_block_tag(tag), do: :ok
+  defp validate_opening_block_tag(_tag), do: :ok
 
   @spec get_block_helper(%Helpers{}, String.t()) :: {:ok, function}
   defp get_block_helper(%Helpers{block_helpers: block_helpers}, name) do
@@ -196,11 +196,11 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Block close. Blocks must close the tag that opened.
-  defp parse("{{/" <> tail, acc, helpers, []) do
+  defp parse("{{/" <> _tail, _acc, _helpers, []) do
     {:error, "Unexpected closing block tag."}
   end
 
-  defp parse("{{/" <> tail, acc, helpers, [active_block | block_contexts]) do
+  defp parse("{{/" <> tail, acc, _helpers, [active_block | block_contexts]) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_closing_block_tag(tag, active_block) do
       {:ok, acc, tail, block_contexts}
@@ -243,7 +243,7 @@ defmodule Zappa do
   end
 
   @spec validate_partial_tag(%Tag{}) :: :ok
-  defp validate_partial_tag(tag), do: :ok
+  defp validate_partial_tag(_tag), do: :ok
 
   # Wraps the output in a function if only a string was registered
   @spec get_partial_helper(%Helpers{}, String.t()) :: {:ok, function}
@@ -279,7 +279,7 @@ defmodule Zappa do
   end
 
   @spec validate_non_escaped_tag(%Tag{}) :: :ok
-  defp validate_non_escaped_tag(%Tag{options: ""} = tag), do: :ok
+  defp validate_non_escaped_tag(%Tag{options: ""}), do: :ok
 
   @spec validate_non_escaped_tag(%Tag{}) :: {:error, String.t()}
   defp validate_non_escaped_tag(_tag) do
@@ -293,7 +293,7 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Regular tag (HTML-escaped)
-  defp parse("{{" <> tail, acc, %Helpers{helpers: helper_map} = helpers, block_contexts) do
+  defp parse("{{" <> tail, acc, helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_regular_tag(tag),
          {:ok, function} <- get_helper(helpers, tag.name),
@@ -310,7 +310,7 @@ defmodule Zappa do
   end
 
   @spec validate_regular_tag(%Tag{}) :: atom
-  defp validate_regular_tag(tag), do: :ok
+  defp validate_regular_tag(_tag), do: :ok
 
   # This getter is constructed so that one may override the default functionality, but it will always fall back to it.
   @spec get_helper(%Helpers{}, String.t()) :: {:ok, function}
@@ -333,7 +333,7 @@ defmodule Zappa do
   # Error: ending delimiter found
   # Try to include some information in the error message
   @spec parse(head, accumulator, %Helpers{}, String.t()) :: {:error, String.t()}
-  defp parse("}}" <> tail, acc, _helpers, _block_contexts) do
+  defp parse("}}" <> _tail, acc, _helpers, _block_contexts) do
     if String.length(acc) > 32 do
       <<first_chunk::binary-size(32)>> <> _ = acc
       {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
@@ -368,7 +368,7 @@ defmodule Zappa do
     make_tag_struct(tag_acc, tail)
   end
 
-  defp accumulate_tag("{" <> tail, delimiter, tag_acc) do
+  defp accumulate_tag("{" <> tail, _delimiter, _tag_acc) do
     {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
   end
 

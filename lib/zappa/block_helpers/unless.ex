@@ -1,8 +1,7 @@
 defmodule Zappa.BlockHelpers.Unless do
-  @moduledoc """
-  This module implements the `unless` block-helper.
-  https://handlebarsjs.com/guide/builtin-helpers.html#unless
-  """
+  @moduledoc false
+  # This module implements the `unless` block-helper.
+  # https://handlebarsjs.com/guide/builtin-helpers.html#unless
 
   alias Zappa.Tag
 

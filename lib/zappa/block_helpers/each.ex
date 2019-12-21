@@ -1,8 +1,7 @@
 defmodule Zappa.BlockHelpers.Each do
-  @moduledoc """
-  This module implements the [each](https://handlebarsjs.com/guide/builtin-helpers.html#each) block-helper.
-  This helper must include options.
-  """
+  @moduledoc false
+  #  This module implements the [each](https://handlebarsjs.com/guide/builtin-helpers.html#each) block-helper.
+  #  This helper must include options.
 
   alias Zappa.Tag
 

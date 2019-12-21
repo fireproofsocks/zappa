@@ -1,14 +1,29 @@
 defmodule Zappa.MixProject do
   use Mix.Project
 
+  @version "1.0.0"
+
   def project do
     [
       app: :zappa,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.9",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases()
+      aliases: aliases(),
+      source_url: "https://github.com/fireproofsocks/zappa",
+      docs: [
+        source_ref: "v#{@version}",
+#        main: "overview",
+        logo: "logo.png",
+#        extra_section: "GUIDES",
+#        assets: "guides/assets",
+#        formatters: ["html", "epub"],
+#        groups_for_modules: groups_for_modules(),
+#        extras: extras(),
+#        groups_for_extras: groups_for_extras()
+      ],
     ]
   end
 
@@ -18,6 +33,10 @@ defmodule Zappa.MixProject do
       extra_applications: [:logger]
     ]
   end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do

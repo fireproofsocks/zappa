@@ -1,8 +1,7 @@
 defmodule Zappa.BlockHelpers.If do
-  @moduledoc """
-  This module implements the [if](https://handlebarsjs.com/guide/builtin-helpers.html#if) block-helper.
-  This helper must include options.
-  """
+  @moduledoc false
+  # This module implements the [if](https://handlebarsjs.com/guide/builtin-helpers.html#if) block-helper.
+  # This helper must include options.
 
   alias Zappa.Tag
 
