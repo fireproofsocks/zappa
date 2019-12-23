@@ -8,9 +8,9 @@ defmodule Zappa.Helpers do
 
   The keys in this struct are the following:
 
-  - `:helpers` - contains a map of callbacks used by simple tags, e.g. `{{foo}}`. See `Zappa.register_helper/3`.
-  - `:block_helpers` - contains a map of callbacks used by block tags, e.g. `{{#foo}}...{{/foo}}`. See `Zappa.register_block/3`.
-  - `:partials` - callbacks used to resolve "partials" tags, e.g. `{{>example}}`. See `Zappa.register_partial/3`.
+  - `:helpers` - contains a map of callbacks used by simple tags, e.g. `{{verse1}}`. See `Zappa.register_helper/3`.
+  - `:block_helpers` - contains a map of callbacks used by block tags, e.g. `{{#refrain}}Catholic girls{{/refrain}}`. See `Zappa.register_block/3`.
+  - `:partials` - callbacks used to resolve "partials" tags, e.g. `{{>girl_on_the_bus}}`. See `Zappa.register_partial/3`.
   """
 
   defstruct helpers: %{},

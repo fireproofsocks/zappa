@@ -8,7 +8,6 @@ defmodule Zappa.TestCase do
 
   using do
     quote do
-
       alias Zappa.Helpers
 
       @doc """
@@ -40,7 +39,7 @@ defmodule Zappa.TestCase do
 
     %{
       hbs: handlebars,
-      eex: eex,
+      eex: eex
     }
   end
 

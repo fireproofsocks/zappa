@@ -3,14 +3,7 @@ defmodule Zappa do
   This implementation relies on tail recursion (and not regular expressions).
   Zappa is a Handlebars to EEx [transpiler](https://en.wikipedia.org/wiki/Source-to-source_compiler).
 
-    Helpers:
-    functions receive a `%Zappa.Tag{}` struct
 
-    Blocks:
-    functions receive a `%Zappa.Tag{}` struct and the contents of the block
-
-    Partials:
-    functions receive a `%Zappa.Tag{}` struct
 
 
   Handlebar Tags:
@@ -27,7 +20,7 @@ defmodule Zappa do
   alias Zappa.{
     Helpers,
     Tag
-  }
+    }
 
   require Logger
 
@@ -51,13 +44,17 @@ defmodule Zappa do
   # block context
   @typep block_contexts :: list()
 
-  @default_helper_callback &Zappa.Helpers.Default.parse_default/1
+  # These are defined separately because the parser will fall back to them if no callbacks are registered in the
+  # %Zappa.Helpers{} struct.
+  @default_escaped_callback &Zappa.Helpers.EscapedDefault.parse_escaped_default/1
+  @default_unescaped_callback &Zappa.Helpers.UnescapedDefault.parse_unescaped_default/1
 
   @default_helpers %Zappa.Helpers{
     helpers: %{
       "else" => &Zappa.Helpers.Else.parse_else/1,
       "log" => &Zappa.Helpers.Log.parse_log/1,
-      "__default__" => &Zappa.Helpers.Default.parse_default/1
+      "__escaped__" => @default_escaped_callback,
+      "__unescaped__" => @default_unescaped_callback
     },
     block_helpers: %{
       "if" => &Zappa.BlockHelpers.If.parse_if/1,
@@ -67,34 +64,50 @@ defmodule Zappa do
     partials: %{}
   }
 
+  # The regular expression used to detect if a supplied template contains any EEx expressions
+  @eex_regex ~r/<%.*%>/U
+
   @doc """
-  Evaluate the handlebars string and return the result. (The name is borrowed the name from EEx.eval_string)
+  This is a convenience function that combines `Zappa.compile/1` and `EEx.eval_string/3`. This function is only
+  recommended when performance is not a consideration because the handlebars template is (re)compiled each time.
   """
-  @spec eval_string(handlebars_template, list) :: String.t()
+  @spec eval_string(handlebars_template, keyword) :: String.t()
   def eval_string(handlebars_template, values_list) do
     compile(handlebars_template)
     |> EEx.eval_string(values_list)
   end
 
   @doc """
-  Optionally, you may wish to register and supply your own helper functions to augment or replace the defaults
-  available via `get_default_helpers/0`.
+  This is a convenience function that combines `Zappa.compile/2` and `EEx.eval_string/3` - it is behaves the same as
+  `Zappa.eval_string/2`, but it accepts a `%Zappa.Helpers{}` struct. This function is only
+  recommended when performance is not a consideration because the handlebars template is (re)compiled each time.
   """
-  @spec eval_string(handlebars_template, list, map) :: String.t()
-  def eval_string(handlebars_template, values_list, helpers) do
+  @spec eval_string(handlebars_template, keyword, %Zappa.Helpers{}) :: String.t()
+  def eval_string(handlebars_template, values_list, %Zappa.Helpers{} = helpers) do
     compile(handlebars_template, helpers)
     |> EEx.eval_string(values_list)
   end
 
   @doc """
-  Retrieve the default helpers supported
+  Retrieves the regular-, block-, and partial-helpers registered by default.  This function is a useful starting place
+  when you wish to add your own helpers to the defaults.
+
+  ## Examples
+      iex> helpers = Zappa.get_default_helpers()
+      iex> helpers = Zappa.register_helper("random_number", fn(tag) -> 42 end)
+      iex> {:ok, eex} = Zappa.compile("My favorite number is {{random_number}}", helpers)
+
+  See the following functions for easily adding your own callbacks to the `%Zappa.Helpers{}` struct:
+  - `Zappa.register_helper/3`
+  - `Zappa.register_block/3`
+  - `Zappa.register_partial/3`
   """
   @spec get_default_helpers() :: %Zappa.Helpers{}
   def get_default_helpers, do: @default_helpers
 
   @doc """
   Compiles a handlebars template to EEx using the default helpers (if, with, unless, etc.).
-  See get_default_helpers/0
+  See `Zappa.get_default_helpers/0`
 
 
   ## Examples
@@ -107,31 +120,40 @@ defmodule Zappa do
   @spec compile(handlebars_template) :: {:ok, eex_template} | {:error, String.t()}
   def compile(template), do: compile(template, get_default_helpers())
 
-  @doc """
-  Compiles a handlebars template to EEx using the helpers provided.
 
+  @doc """
+  Compiles a handlebars template to EEx using the helpers provided.  This is the function you want if you want to add
+  your own helper functions to the processing.
   """
-  @spec compile(handlebars_template, map) :: {:ok, eex_template} | {:error, String.t()}
-  def compile(template, helpers) do
-    template
-    |> strip_eex()
-    |> parse("", helpers, [])
+  @spec compile(handlebars_template, %Zappa.Helpers{}) ::
+          {:ok, eex_template} | {:error, String.t()}
+  def compile(template, %Zappa.Helpers{} = helpers) do
+    case has_eex?(template) do
+      true -> {:error, "Compilation unsafe: the source template contains EEx expressions."}
+      false -> parse(template, "", helpers, [])
+    end
   end
 
-  # Ideally, we would accumulate for the current block until it ends
-  # Starting:
-  # []  -- the root context
-  # ["if"] -- we've entered into an if block
-  # ["each", "if"] -- inside the if-block, there was an "each" block
-  # defp parse("", acc, _helpers, block_context_list), do: {:ok, acc}
+  @doc """
+  This is a variant of the `Zappa.compile/1` function that raises an error instead of returning a tuple.  (I was
+  told this was idiomatic Elixir).
+  """
+  @spec compile!(handlebars_template) :: eex_template
+  def compile!(template) do
+    compile(template, get_default_helpers())
+    |> bangify()
+  end
 
-  # {{ regular tag (html escaped)
-  # {{{ non-escaped tag
-  # {{! comment
-  # {{!-- comment --}}
-  # {{> partial
-  # {{# block
-  # {{{{raw-helper}}}}
+  @doc """
+  This is a variant of the `Zappa.compile/2` function that raises an error instead of returning a tuple.
+  """
+  @spec compile!(handlebars_template, %Zappa.Helpers{}) :: eex_template
+  def compile!(template, %Zappa.Helpers{} = helpers) do
+    compile(template, helpers)
+    |> bangify()
+  end
+
+  # TODO: {{{{raw-helper}}}}
   @spec parse(handlebars_template, accumulator, map, block_contexts) ::
           {:ok, String.t()} | {:error, String.t()}
   # End of handlebars template! All done!
@@ -143,25 +165,25 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Comment tag
-  defp parse("{{!--" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{!--" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     case accumulate_tag(tail, "--}}") do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
 
   ######################################################################################################################
   # Comment tag
-  defp parse("{{!" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{!" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     case accumulate_tag(tail) do
-      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.contents}%>", helpers, block_contexts)
+      {:ok, tag, tail} -> parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
       {:error, message} -> {:error, message}
     end
   end
 
   ######################################################################################################################
   # Block open
-  defp parse("{{#" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{#" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_opening_block_tag(tag),
          {:ok, callback} <- get_block_helper(helpers, tag.name),
@@ -225,7 +247,7 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Partial
-  defp parse("{{>" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{>" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_partial_tag(tag),
          {:ok, callback} <- get_partial_helper(helpers, tag.name),
@@ -245,7 +267,6 @@ defmodule Zappa do
   @spec validate_partial_tag(%Tag{}) :: :ok
   defp validate_partial_tag(_tag), do: :ok
 
-  # Wraps the output in a function if only a string was registered
   @spec get_partial_helper(%Helpers{}, String.t()) :: {:ok, function}
   defp get_partial_helper(%Helpers{partials: partial_helpers}, name) do
     handler =
@@ -255,6 +276,7 @@ defmodule Zappa do
         fn tag -> {:error, "Partial not registered: #{tag.name}"} end
       )
 
+    # For convenience/normalization, we wrap the output in a function if only a string was registered
     case handler do
       handler when is_function(handler) -> {:ok, handler}
       handler -> {:ok, fn _ -> handler end}
@@ -263,10 +285,11 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Non-escaped tag
-  defp parse("{{{" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail, "}}}"),
          :ok <- validate_non_escaped_tag(tag),
-         {:ok, contents} <- render_non_escaped_tag(tag, helpers) do
+         {:ok, function} <- get_unescaped_helper(helpers),
+         {:ok, contents} <- call_function(function, tag) do
       parse(tail, acc <> contents, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
@@ -286,14 +309,9 @@ defmodule Zappa do
     {:error, "Non-escaped tags should not include options"}
   end
 
-  @spec render_non_escaped_tag(%Tag{}, %Helpers{}) :: {:ok, accumulator} | {:error, String.t()}
-  defp render_non_escaped_tag(tag, _helpers) do
-    {:ok, "<%= #{tag.name} %>"}
-  end
-
   ######################################################################################################################
   # Regular tag (HTML-escaped)
-  defp parse("{{" <> tail, acc, helpers, block_contexts) do
+  defp parse("{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag, tail} <- accumulate_tag(tail),
          :ok <- validate_regular_tag(tag),
          {:ok, function} <- get_helper(helpers, tag.name),
@@ -322,9 +340,21 @@ defmodule Zappa do
         name,
         Map.get(
           helpers_map,
-          "__default__",
-          @default_helper_callback
+          "__escaped__",
+          @default_escaped_callback
         )
+      )
+    }
+  end
+
+  @spec get_unescaped_helper(%Helpers{}) :: {:ok, function}
+  defp get_unescaped_helper(%Helpers{helpers: helpers_map}) do
+    {
+      :ok,
+      Map.get(
+        helpers_map,
+        "__unescaped__",
+        @default_unescaped_callback
       )
     }
   end
@@ -335,7 +365,7 @@ defmodule Zappa do
   @spec parse(head, accumulator, %Helpers{}, String.t()) :: {:error, String.t()}
   defp parse("}}" <> _tail, acc, _helpers, _block_contexts) do
     if String.length(acc) > 32 do
-      <<first_chunk::binary-size(32)>> <> _ = acc
+      <<first_chunk :: binary - size(32)>> <> _ = acc
       {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
     else
       {:error, "Unexpected closing delimiter: }}"}
@@ -343,8 +373,8 @@ defmodule Zappa do
   end
 
   # Pass-thru: when we're not in a tag, the character at the head goes appended to the accumulator
-  defp parse(<<head::binary-size(1)>> <> tail, acc, helpers, block_contexts),
-    do: parse(tail, acc <> head, helpers, block_contexts)
+  defp parse(<<head :: binary - size(1)>> <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts),
+       do: parse(tail, acc <> head, helpers, block_contexts)
 
   ######################################################################################################################
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
@@ -353,17 +383,17 @@ defmodule Zappa do
   defp accumulate_tag(head, ending_delimiter \\ "}}", tag_acc \\ "")
   defp accumulate_tag("", _ending_delimiter, _tag_acc), do: {:error, "Unclosed tag."}
 
-  defp accumulate_tag(<<h::binary-size(4), tail::binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h :: binary - size(4), tail :: binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
 
-  defp accumulate_tag(<<h::binary-size(3), tail::binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h :: binary - size(3), tail :: binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
 
-  defp accumulate_tag(<<h::binary-size(2), tail::binary>>, delimiter, tag_acc)
+  defp accumulate_tag(<<h :: binary - size(2), tail :: binary>>, delimiter, tag_acc)
        when delimiter == h do
     make_tag_struct(tag_acc, tail)
   end
@@ -372,7 +402,7 @@ defmodule Zappa do
     {:error, "Unexpected opening bracket inside a tag:{#{tail}"}
   end
 
-  defp accumulate_tag(<<head::binary-size(1)>> <> tail, delimiter, tag_acc) do
+  defp accumulate_tag(<<head :: binary - size(1)>> <> tail, delimiter, tag_acc) do
     accumulate_tag(tail, delimiter, tag_acc <> head)
   end
 
@@ -383,7 +413,7 @@ defmodule Zappa do
 
     case result do
       [tag_name] ->
-        {:ok, %Tag{name: String.trim(tag_name), options: "", contents: tag_acc}, tail}
+        {:ok, %Tag{name: String.trim(tag_name), options: "", raw_contents: tag_acc}, tail}
 
       [tag_name, tag_options] ->
         {
@@ -391,25 +421,17 @@ defmodule Zappa do
           %Tag{
             name: String.trim(tag_name),
             options: String.trim(tag_options),
-            contents: tag_acc
+            raw_contents: tag_acc
           },
           tail
         }
     end
   end
 
-  @doc """
-  This removes all EEX tags from the input template.
-  This is a security measure in case some nefarious user gets the sneaky idea to put EEX functions inside what should
-  be a Handlebars template.
-  TODO: better to do this via parsing action? Yes, it would be faster, but it would be harder to skip
-  """
-  def strip_eex(template) do
-    regex = ~r/<%.*%>/U
+  # Detect if the given string contains EEx expressions
+  @spec has_eex?(handlebars_template) :: boolean
+  defp has_eex?(template), do: Regex.match?(@eex_regex, template)
 
-    Regex.scan(regex, template)
-    |> Enum.reduce(template, fn [x | _], acc -> String.replace(acc, x, "") end)
-  end
 
   @doc """
   This is a convenience function that adds your helper callback to the %Zappa.Helpers{} struct.
@@ -462,8 +484,18 @@ defmodule Zappa do
         {:ok, string}
 
       _ ->
-        {:error,
-         "Invalid function output. Registered helper function output must be {:ok, String.t()} | {:error, String.t} | String.t"}
+        {
+          :error,
+          "Invalid function output. Registered helper function output must be {:ok, String.t()} | {:error, String.t} | String.t"
+        }
+    end
+  end
+
+  @spec bangify({atom, String.t}) :: eex_template
+  defp bangify(result) do
+    case result do
+      {:ok, eex} -> eex
+      {:error, message} -> raise message
     end
   end
 end

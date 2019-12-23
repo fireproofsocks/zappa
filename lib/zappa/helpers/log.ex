@@ -6,7 +6,6 @@ defmodule Zappa.Helpers.Log do
   # TODO: argument parser to support n inputs and keyword arguments, e.g.
   # `{{log "debug logging" level="debug"}}`
 
-
   alias Zappa.Tag
 
   def parse_log(%Tag{options: ""}) do

@@ -1,8 +1,7 @@
 defmodule ZappaTest do
-
   use Zappa.TestCase
 
-#  alias Zappa.Helpers
+  #  alias Zappa.Helpers
 
   #  doctest Zappa
 
@@ -42,6 +41,16 @@ defmodule ZappaTest do
     #    end
   end
 
+  describe "default helpers" do
+    test "__escaped__ falls back to @default_escaped_callback when no function registered" do
+        {:ok, "<%= HtmlEntities.encode(hot_rats) %>"} = Zappa.compile("{{hot_rats}}", %Zappa.Helpers{})
+    end
+
+    test "__unescaped__ falls back to @default_unescaped_callback when no function registered" do
+      {:ok, "<%= plook %>"} = Zappa.compile("{{{plook}}}", %Zappa.Helpers{})
+    end
+  end
+
   describe "compile/1" do
     test "do nothing when there are no tags" do
       input = ~s"""
@@ -52,16 +61,11 @@ defmodule ZappaTest do
       assert input == output
     end
 
-    test "Any EEx tags are stripped from the input string" do
+    test "error is returned if EEx expressions are detected" do
       tpl = ~s"""
       Some <%= evil %> stuff
       """
-
-      output = ~s"""
-      Some  stuff
-      """
-
-      assert {:ok, output} == Zappa.compile(tpl)
+      assert {:error, _error} = Zappa.compile(tpl)
     end
   end
 

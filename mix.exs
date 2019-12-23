@@ -15,15 +15,15 @@ defmodule Zappa.MixProject do
       source_url: "https://github.com/fireproofsocks/zappa",
       docs: [
         source_ref: "v#{@version}",
-#        main: "overview",
-        logo: "logo.png",
-#        extra_section: "GUIDES",
-#        assets: "guides/assets",
-#        formatters: ["html", "epub"],
-#        groups_for_modules: groups_for_modules(),
-#        extras: extras(),
-#        groups_for_extras: groups_for_extras()
-      ],
+        #        main: "overview",
+        logo: "logo.png"
+        #        extra_section: "GUIDES",
+        #        assets: "guides/assets",
+        #        formatters: ["html", "epub"],
+        #        groups_for_modules: groups_for_modules(),
+        #        extras: extras(),
+        #        groups_for_extras: groups_for_extras()
+      ]
     ]
   end
 
