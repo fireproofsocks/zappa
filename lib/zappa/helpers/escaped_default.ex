@@ -9,7 +9,7 @@ defmodule Zappa.Helpers.EscapedDefault do
     do: {:ok, "<%= HtmlEntities.encode(#{tag.name}) %>"}
 
   @spec parse_escaped_default(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
-  def parse_escaped_default(tag) do
+  def parse_escaped_default(_tag) do
     {:error, "Options not allowed for regular tags unless a helper is registered"}
   end
 end

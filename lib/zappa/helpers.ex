@@ -1,7 +1,7 @@
 defmodule Zappa.Helpers do
   @moduledoc """
   This struct contains maps that define various types of callback functions. The functions housed in this struct are
-  what give Zappa its power. An instance of this struct can be passed to `Zappa.compile/2`.
+  what give Zappa its power. An instance of this struct can be passed to either `Zappa.compile/2` or `Zappa.compile!/2`.
 
   Some functions are registered by default: see `Zappa.get_default_helpers/0`; the default helpers are used when
   `Zappa.compile/1` is called.
@@ -16,4 +16,10 @@ defmodule Zappa.Helpers do
   defstruct helpers: %{},
             block_helpers: %{},
             partials: %{}
+
+  @type t :: %__MODULE__{
+          helpers: map,
+          block_helpers: map,
+          partials: map
+        }
 end

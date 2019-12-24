@@ -43,7 +43,8 @@ defmodule ZappaTest do
 
   describe "default helpers" do
     test "__escaped__ falls back to @default_escaped_callback when no function registered" do
-        {:ok, "<%= HtmlEntities.encode(hot_rats) %>"} = Zappa.compile("{{hot_rats}}", %Zappa.Helpers{})
+      {:ok, "<%= HtmlEntities.encode(hot_rats) %>"} =
+        Zappa.compile("{{hot_rats}}", %Zappa.Helpers{})
     end
 
     test "__unescaped__ falls back to @default_unescaped_callback when no function registered" do
@@ -65,6 +66,7 @@ defmodule ZappaTest do
       tpl = ~s"""
       Some <%= evil %> stuff
       """
+
       assert {:error, _error} = Zappa.compile(tpl)
     end
   end

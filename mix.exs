@@ -15,15 +15,26 @@ defmodule Zappa.MixProject do
       source_url: "https://github.com/fireproofsocks/zappa",
       docs: [
         source_ref: "v#{@version}",
-        #        main: "overview",
-        logo: "logo.png"
+        main: "getting_started",
+        logo: "logo.png",
         #        extra_section: "GUIDES",
         #        assets: "guides/assets",
         #        formatters: ["html", "epub"],
         #        groups_for_modules: groups_for_modules(),
-        #        extras: extras(),
+        extras: extras()
         #        groups_for_extras: groups_for_extras()
-      ]
+      ],
+      package: package()
+    ]
+  end
+
+  def extras do
+    [
+      "docs/overview.md",
+      "docs/getting_started.md",
+      "docs/features.md",
+      "docs/helpers.md",
+      "docs/registering_helpers.md"
     ]
   end
 
@@ -50,6 +61,29 @@ defmodule Zappa.MixProject do
   defp aliases do
     [
       lint: ["format --check-formatted", "credo --strict"]
+    ]
+  end
+
+  defp package do
+    [
+      description: "Handlebars templates for Elixir",
+      files: [
+        "lib",
+        "priv",
+        "mix.exs",
+        "README.md",
+        "CHANGELOG.md",
+        ".formatter.exs"
+      ],
+      maintainers: [
+        "Everett Griffiths"
+      ],
+      licenses: ["MIT"],
+      links: %{
+        Website: "https://github.com/fireproofsocks/zappa",
+        Changelog: "https://github.com/fireproofsocks/zappa/blob/master/CHANGELOG.md",
+        GitHub: "https://github.com/fireproofsocks/zappa"
+      }
     ]
   end
 end
