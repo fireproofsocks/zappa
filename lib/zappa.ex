@@ -44,7 +44,8 @@ defmodule Zappa do
       "else" => &Zappa.Helpers.Else.parse_else/1,
       "log" => &Zappa.Helpers.Log.parse_log/1,
       "__escaped__" => @default_escaped_callback,
-      "__unescaped__" => @default_unescaped_callback
+      "__unescaped__" => @default_unescaped_callback,
+      "@index" => &Zappa.Helpers.Index.parse_index/1
     },
     block_helpers: %{
       "if" => &Zappa.BlockHelpers.If.parse_if/1,
@@ -156,22 +157,28 @@ defmodule Zappa do
   # TODO: helper names must not being with ./ etc.
   # See https://elixirforum.com/t/using-put-in-for-structs/27645
   @spec register_helper(Helpers.t(), String.t(), function) :: Helpers.t()
-  def register_helper(%Helpers{} = helpers, name, callback),
-    do: put_in(helpers.helpers[name], callback)
+  def register_helper(%Helpers{} = helpers, name, callback) do
+    validate_callback_name(name)
+    put_in(helpers.helpers[name], callback)
+  end
 
   @doc """
   This is a convenience function that adds your block helper callback to the %Zappa.Helpers{} struct.
   """
   @spec register_block(Helpers.t(), String.t(), function) :: Helpers.t()
-  def register_block(%Helpers{} = helpers, name, callback),
-    do: put_in(helpers.block_helpers[name], callback)
+  def register_block(%Helpers{} = helpers, name, callback) do
+    validate_callback_name(name)
+    put_in(helpers.block_helpers[name], callback)
+  end
 
   @doc """
   This is a convenience function that adds your helper callback to the %Zappa.Helpers{} struct.
   """
   @spec register_partial(Helpers.t(), String.t(), function) :: Helpers.t()
-  def register_partial(%Helpers{} = helpers, name, callback),
-    do: put_in(helpers.partials[name], callback)
+  def register_partial(%Helpers{} = helpers, name, callback) do
+    validate_callback_name(name)
+    put_in(helpers.partials[name], callback)
+  end
 
   ######################################################################################################################
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
@@ -302,6 +309,28 @@ defmodule Zappa do
   # Detect if the given string contains EEx expressions
   @spec has_eex?(handlebars_template) :: boolean
   defp has_eex?(template), do: Regex.match?(@eex_regex, template)
+
+  # https://elixirforum.com/t/how-to-detect-if-a-given-character-grapheme-is-whitespace/26735/5
+  @spec make_tag_struct(accumulator, tail) :: {:error, String.t()} | {:ok, %Tag{}, tail}
+  defp make_tag_struct(tag_acc, tail) do
+    result = String.split(String.trim(tag_acc), ~r/\p{Zs}/u, parts: 2)
+
+    case result do
+      [tag_name] ->
+        {:ok, %Tag{name: String.trim(tag_name), options: "", raw_contents: tag_acc}, tail}
+
+      [tag_name, tag_options] ->
+        {
+          :ok,
+          %Tag{
+            name: String.trim(tag_name),
+            options: String.trim(tag_options),
+            raw_contents: tag_acc
+          },
+          tail
+        }
+    end
+  end
 
   # TODO: {{{{raw-helper}}}}
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
@@ -438,27 +467,16 @@ defmodule Zappa do
   defp parse(<<head::binary-size(1)>> <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts),
     do: parse(tail, acc <> head, helpers, block_contexts)
 
-  # https://elixirforum.com/t/how-to-detect-if-a-given-character-grapheme-is-whitespace/26735/5
-  @spec make_tag_struct(accumulator, tail) :: {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp make_tag_struct(tag_acc, tail) do
-    result = String.split(String.trim(tag_acc), ~r/\p{Zs}/u, parts: 2)
-
-    case result do
-      [tag_name] ->
-        {:ok, %Tag{name: String.trim(tag_name), options: "", raw_contents: tag_acc}, tail}
-
-      [tag_name, tag_options] ->
-        {
-          :ok,
-          %Tag{
-            name: String.trim(tag_name),
-            options: String.trim(tag_options),
-            raw_contents: tag_acc
-          },
-          tail
-        }
-    end
+  defp validate_callback_name(name) when not is_binary(name) do
+    raise "Invalid helper function name."
   end
+
+  defp validate_callback_name(<<head::binary-size(1)>> <> _tail) when head in ["."] do
+    raise "Invalid helper function name."
+  end
+
+  @spec validate_callback_name(String.t()) :: :ok
+  defp validate_callback_name(_name), do: :ok
 
   @spec validate_closing_block_tag(%Tag{}, String.t()) :: {:error, String.t()}
   defp validate_closing_block_tag(%Tag{name: ""}, _active_block) do

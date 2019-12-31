@@ -272,135 +272,6 @@ defmodule ZappaTest do
 
       assert {:ok, output} == Zappa.compile(tpl)
     end
-
-    test "each: regular list" do
-      tpl = ~s"""
-      <ul class="people_list">
-      {{#each people}}
-      <li>{{this}}</li>
-      {{/each}}
-      </ul>
-      """
-
-      expected = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= HtmlEntities.encode(this) %></li>
-      <% end %>
-      </ul>
-      """
-
-      {:ok, actual} = Zappa.compile(tpl)
-
-      actual = strip_whitespace(actual)
-      expected = strip_whitespace(expected)
-
-      assert actual == expected
-    end
-  end
-
-  describe "each loop" do
-    # https://stackoverflow.com/questions/39937948/loop-through-a-maps-key-value-pairs
-    @tag :skip
-    test "list with block parameters (value only)" do
-      _tpl = ~s"""
-      <ul class="people_list">
-      {{#each people as |p|}}
-      <li>{{p}}</li>
-      {{/each}}
-      </ul>
-      """
-
-      _output = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= this %></li>
-      <% end %>
-      </ul>
-      """
-    end
-
-    @tag :skip
-    test "list with block parameters (using as)" do
-      _tpl = ~s"""
-      <ul class="people_list">
-      {{#each people as |value key|}}
-      <li>{{key}}.{{value}}</li>
-      {{/each}}
-      </ul>
-      """
-
-      _output = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= this %></li>
-      <% end %>
-      </ul>
-      """
-    end
-
-    @tag :skip
-    test "list with else" do
-      _tpl = ~s"""
-      <ul class="people_list">
-      {{#each people}}
-      <li>{{this}}</li>
-      {{else}}
-      <b>No people...</b>
-      {{/each}}
-      </ul>
-      """
-
-      _output = ~s"""
-      <ul class="people_list">
-      <%= for this <- people do %>
-      <li><%= this %></li>
-      <% end %>
-      ?????
-      </ul>
-      """
-    end
-  end
-
-  describe "dealing with arrays or maybe objects" do
-    # https://stackoverflow.com/questions/28459493/iterate-over-list-in-embedded-elixir
-    @tag :skip
-    test "Enum.each that works with either a list or a map" do
-      # Both of these work
-      _m = %{a: "apple", b: "boy", c: "cat"}
-      m = ["apple", "boy", "cat"]
-
-      Enum.each(
-        m,
-        fn x ->
-          case x do
-            x when is_tuple(x) ->
-              {k, v} = x
-              IO.puts("#{k}: #{v}")
-
-            x ->
-              IO.puts(x)
-          end
-        end
-      )
-
-      Enum.with_index(m)
-      |> Enum.each(fn {x, index} ->
-        case x do
-          x when is_tuple(x) ->
-            {k, v} = x
-            IO.puts("#{k}: #{v} @index:#{index}")
-
-          x ->
-            IO.puts("#{x} @index:#{index}")
-        end
-      end)
-    end
-  end
-
-  describe "@index" do
-    # https://stackoverflow.com/questions/38841248/elixir-templates-looping-through-a-list-with-iterator-value
-    # Enum.with_index
   end
 
   describe "default helper functions" do
@@ -423,9 +294,34 @@ defmodule ZappaTest do
 
   describe "register_helper/3" do
     test "raises error when name is not binary or atom" do
+      assert_raise RuntimeError, fn -> Zappa.register_helper(%Helpers{}, %{}, "value") end
     end
 
-    test "regular " do
+    test "raises error when name begins with a period" do
+      assert_raise RuntimeError, fn -> Zappa.register_helper(%Helpers{}, %{}, "value") end
+    end
+
+    test "override __escaped__" do
+      helpers =
+        Zappa.register_helper(%Helpers{}, "__escaped__", fn tag ->
+          {:ok, "<%= my_encode(#{tag.name}) %>"}
+        end)
+
+      {:ok, result} = Zappa.compile("{{wet_tshirt}}", helpers)
+      assert "<%= my_encode(wet_tshirt) %>" == result
+    end
+
+    test "override __unescaped__" do
+      helpers =
+        Zappa.register_helper(%Helpers{}, "__unescaped__", fn tag ->
+          {:ok, "<%= my_raw(#{tag.name}) %>"}
+        end)
+
+      {:ok, result} = Zappa.compile("{{{dong_work}}}", helpers)
+      assert "<%= my_raw(dong_work) %>" == result
+    end
+
+    test "regular operation" do
       result =
         Zappa.get_default_helpers()
         |> Zappa.register_helper("all_caps", fn options -> String.upcase(options) end)

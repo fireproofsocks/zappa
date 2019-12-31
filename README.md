@@ -1,14 +1,9 @@
 # Zappa
 
-Zappa is an [Elixir](https://elixir-lang.org/) implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  The mother of its invention was the need to have untrusted users create and edit templates to format their own data.  [EEx]((https://hexdocs.pm/eex/EEx.html) templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) lacked the features that were needed (if-statements, loops, custom functions, etc.).
+Zappa is an [Elixir](https://elixir-lang.org/) implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  It works by [transpiling](https://en.wikipedia.org/wiki/Source-to-source_compiler) handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  The mother of its invention was the need to have untrusted users create and edit templates to format their own data.  [EEx](https://hexdocs.pm/eex/EEx.html) templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) lacked the features that were needed (if-statements, loops, custom functions, etc.).
  
-Like "handlebars", Zappa is a name that nods to the hirsute nomenclature of its predecessors and pays tribute to [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa), the iconoclastic grower of [watermelons in Easter hay](https://www.youtube.com/watch?v=xFvzfNtXnVU).
+Like the name "handlebars", "Zappa" nods to the hirsute nomenclature of its predecessors and pays tribute to the late great iconoclastic, [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa).
 
-Zappa [transpiles](https://en.wikipedia.org/wiki/Source-to-source_compiler) handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  
-
-This implementation relies on tail recursion (and not regular expressions).
-
-See [Handlebars Documentation](https://devdocs.io/handlebars/)
 
 ## Similar Packages
 
@@ -24,11 +19,12 @@ Or if you don't need to carefully deal executing templates created by untrusted 
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed by adding `zappa` to your list of dependencies in `mix.exs`:
+If [available in Hex](https://hex.pm/docs/publish), the package can be installed by adding `zappa` to your list of dependencies in `mix.exs`.  For the default installation, you should also install the `html_entities` package: it is what Zappa will use to render default tags in your templates.
 
 ```elixir
 def deps do
   [
+    {:html_entities, "~> 0.5.0"},
     {:zappa, "~> 1.0.0"}
   ]
 end
@@ -48,17 +44,10 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
-## Features
-
-- comments
-- if blocks
-- unless blocks
-- log helper
-- partials
-- each (arrays)
 
 ## TODO:
 
+- each with else blocks
 - each (objects)
 - @index
 - raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
@@ -68,5 +57,5 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 ## Not Implemented
 
 These ones probably will not be implemented because they are too tightly coupled to the input data:
-- [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default_regular_tag_handler
+- [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default `__escaped__` helper
 - [lookup](https://handlebarsjs.com/guide/builtin-helpers.html#lookup)

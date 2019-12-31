@@ -5,11 +5,11 @@
 Includes support for:
 
 - comment tags (both `{{! this syntax }}` and `{{!-- this other syntax --}}`)
-- if blocks
+- if blocks, e.g. `{{#if true}} this will display {{/if}}`
 - unless blocks
-- log helper (but only for )
+- log helper (only "info" level supported)
 - partials (via the `{{>example}}` syntax)
-- each (arrays)
+- each blocks for iterating over lists
 
 
 Does not yet support 

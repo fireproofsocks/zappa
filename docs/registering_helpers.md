@@ -1,5 +1,7 @@
 # Registering Helpers
 
+In order to be useful, Zappa relies on callback functions inside the `%Zappa.Helpers{}` struct. 
+
 All helper functions receive a `%Zappa.Tag{}` struct as their single argument.
 
 ## Helpers

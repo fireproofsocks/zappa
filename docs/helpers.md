@@ -9,12 +9,15 @@ Block helpers are denoted with an opening and closing tag.
 ### each
 
 The `each` helper allows your template to iterate over a list.  By default, the current item is available using the `{{this}}` tag.
+Handlebars (and thus Zappa) obfuscates what exactly is in the variable that is passed to the `each` helper: it works for both regular lists and for maps.
 
 ```
 {{#each discography}}
     {{this}} was a hit!
 {{/each}}
 ```
+
+Index...
 
 ### if
 
@@ -32,8 +35,8 @@ The contents of the block display when the statement evaluates to **true**.
 
 This is the inverse of the `if` block. Its contents display when the statement evaluates to **false**.
 ```
-{{#unless you_speak_german}}
-    You cannot join the Church of Appliantology!
+{{#unless we_get_sprayed_with_a_hose}}
+    It's a good day!
 {{/unless}}
 ```
 

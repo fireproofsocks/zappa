@@ -7,7 +7,7 @@ defmodule Zappa.MixProject do
     [
       app: :zappa,
       version: @version,
-      elixir: "~> 1.9",
+      elixir: "~> 1.8",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -32,7 +32,6 @@ defmodule Zappa.MixProject do
     [
       "docs/overview.md",
       "docs/getting_started.md",
-      "docs/features.md",
       "docs/helpers.md",
       "docs/registering_helpers.md"
     ]
@@ -52,7 +51,8 @@ defmodule Zappa.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:html_entities, "~> 0.5.0"},
+      {:html_entities, "~> 0.5.0", only: [:dev, :test], runtime: false},
+      {:jason, "~> 1.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.21.2", only: :dev, runtime: false},
       {:credo, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
@@ -76,7 +76,8 @@ defmodule Zappa.MixProject do
         ".formatter.exs"
       ],
       maintainers: [
-        "Everett Griffiths"
+        "Everett Griffiths",
+        "Utility Muffin Research Kitchen"
       ],
       licenses: ["MIT"],
       links: %{
