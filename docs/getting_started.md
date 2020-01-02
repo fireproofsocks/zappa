@@ -13,7 +13,7 @@ defp deps do
 end
 ```
 
-**DO NOT FORGET to install :html_entities**!  The EEx code that Zappa generates will reference the `HtmlEntities.encode/1` function, so you must either include it as a dependency or override the `__escaped__` helper as outlined in the [Advanced Customizations](advanced.htmls) section.
+**DO NOT FORGET to install `:html_entities`**!  The EEx code that Zappa generates will reference the `HtmlEntities.encode/1` function, so you must either include it as a dependency or override the `__escaped__` helper as outlined in the [Advanced Customizations](advanced.html) page.
 
 ## Your First Template
 

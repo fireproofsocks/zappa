@@ -24,7 +24,7 @@ Zappa can help you in the following conditions:
 2. Your templates require more features than what is available in a simple template language like Mustache.
 3. You are messed up from music, disease, or heartbreak.
 
-If you don't need to deal executing templates created by untrusted users, then stick to [Embedded Elixir (EEx)](https://hexdocs.pm/eex/EEx.html) templates.
+If [Embedded Elixir (EEx)](https://hexdocs.pm/eex/EEx.html) templates are working for you, then you have what you need already.
 If you don't need the extra logic and features that Handlebars templates provide, then you can have a look at these Elixir Mustache implementations: 
 
 - [mustache](https://hex.pm/packages/mustache)

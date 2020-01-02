@@ -12,4 +12,4 @@ However, if you say "I am looking at a ZEBRA" (1. actual). "I ordered a Palomino
 
 ### Features:
 
-What functionality would you like to see? Do you have examples?  Would you consider submitting a pull request?
+What functionality would you like to see? Do you have examples, links, or other references?  Would you consider submitting a pull request?
