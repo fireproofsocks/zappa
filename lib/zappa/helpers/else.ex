@@ -4,11 +4,11 @@ defmodule Zappa.Helpers.Else do
 
   alias Zappa.Tag
 
-  def parse_else(%Tag{options: ""}) do
+  def parse(%Tag{raw_options: ""}) do
     {:ok, "<% else %>"}
   end
 
-  def parse_else(_tag) do
+  def parse(_tag) do
     {:error, "{{else}} tag does not allow options."}
   end
 end

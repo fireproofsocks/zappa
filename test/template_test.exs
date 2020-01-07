@@ -30,7 +30,7 @@ defmodule ZappaTemplateTest do
     assert output == "Music is the only religion that delivers the goods."
   end
 
-  test "converting maps to lists" do
+  test "converting binding maps to lists" do
     bindings =
       "#{__DIR__}/support/templates/willie_the_pimp.json"
       |> File.read!()
@@ -56,4 +56,29 @@ defmodule ZappaTemplateTest do
     #    assert output == true
     # Map.to_list(%{one: 1, two: 2})
   end
+
+  test "each: maps" do
+    bindings =
+      "#{__DIR__}/support/templates/hot_rats.json"
+      |> File.read!()
+      |> Jason.decode!(keys: :atoms)
+      |> Map.to_list()
+
+    hbs = ~s"""
+      {{#each rats}}
+        {{@key}}: {{this}}
+      {{/each}}
+    """
+
+    output =
+      hbs
+      |> Zappa.compile!()
+      |> EEx.eval_string(bindings)
+
+    assert strip_whitespace(output) == "bunk: on piss: off"
+
+    #    assert output == true
+    # Map.to_list(%{one: 1, two: 2})
+  end
+
 end

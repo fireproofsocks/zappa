@@ -1,14 +1,14 @@
-defmodule Zappa.Helpers.Index do
+defmodule Zappa.Helpers.Key do
   @moduledoc false
-  # Handles instances of {{@index}}
+  # Handles instances of {{@key}}
   # The variable name chosen here should match up with the one created in the each.ex parser.
   alias Zappa.Tag
 
   def parse(%Tag{raw_options: ""}) do
-    {:ok, "<%= index___helper %>"}
+    {:ok, "<%= key___helper %>"}
   end
 
   def parse(_tag) do
-    {:error, "The {{@index}} tag does not allow options."}
+    {:error, "The {{@key}} tag does not allow options."}
   end
 end

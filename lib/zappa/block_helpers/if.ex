@@ -5,11 +5,11 @@ defmodule Zappa.BlockHelpers.If do
 
   alias Zappa.Tag
 
-  def parse_if(%Tag{options: ""}) do
+  def parse(%Tag{raw_options: ""}) do
     {:error, "The if helper requires options, e.g. {{#if options}}"}
   end
 
-  def parse_if(tag) do
-    {:ok, "<%= if #{tag.options} %>#{tag.block_contents}<% end %>"}
+  def parse(tag) do
+    {:ok, "<%= if #{tag.raw_options} %>#{tag.parsed_block_contents}<% end %>"}
   end
 end

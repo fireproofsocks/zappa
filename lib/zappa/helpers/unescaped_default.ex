@@ -4,12 +4,12 @@ defmodule Zappa.Helpers.UnescapedDefault do
 
   alias Zappa.Tag
 
-  @spec parse_unescaped_default(%Tag{}) :: {:ok, String.t()} | {:ok, String.t()}
-  def parse_unescaped_default(%Tag{options: ""} = tag),
+  @spec parse(%Tag{}) :: {:ok, String.t()} | {:ok, String.t()}
+  def parse(%Tag{raw_options: ""} = tag),
     do: {:ok, "<%= #{tag.name} %>"}
 
-  @spec parse_unescaped_default(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
-  def parse_unescaped_default(_tag) do
+  @spec parse(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
+  def parse(_tag) do
     {:error, "Options not allowed for unescaped tags"}
   end
 end

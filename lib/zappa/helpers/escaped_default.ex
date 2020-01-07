@@ -4,12 +4,12 @@ defmodule Zappa.Helpers.EscapedDefault do
 
   alias Zappa.Tag
 
-  @spec parse_escaped_default(%Tag{}) :: {:ok, String.t()} | {:ok, String.t()}
-  def parse_escaped_default(%Tag{options: ""} = tag),
+  @spec parse(%Tag{}) :: {:ok, String.t()} | {:ok, String.t()}
+  def parse(%Tag{raw_options: ""} = tag),
     do: {:ok, "<%= HtmlEntities.encode(#{tag.name}) %>"}
 
-  @spec parse_escaped_default(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
-  def parse_escaped_default(_tag) do
+  @spec parse(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
+  def parse(_tag) do
     {:error, "Options not allowed for regular tags unless a helper is registered"}
   end
 end

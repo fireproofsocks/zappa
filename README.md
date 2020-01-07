@@ -47,20 +47,25 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
 ## TODO:
 
-Fix the is_tuple thing in the each helper
 Finish examples
 Clean up tests
 Add docs to built-in helpers, move examples there
-CI
 Update CHANGELOG
-
+--
+Hooks
+Dot notation for accessing variables
+Support for ./name or this/name inside regular tags
 
 ## Not Implemented
 
 - raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
 `{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
 - arguments in helpers e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}` or `{{#each users as |user userId|}}`
+See https://elixir-recipes.github.io/cli/parsing-cli-arguments/
 
 These ones probably will not be implemented because they are too tightly coupled to the input data:
 - [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default `__escaped__` helper
 - [lookup](https://handlebarsjs.com/guide/builtin-helpers.html#lookup)
+- Subexpressions https://handlebarsjs.com/guide/expressions.html#subexpressions
+- Whitespace control: https://handlebarsjs.com/guide/expressions.html#whitespace-control
+- Escaping expressions: https://handlebarsjs.com/guide/expressions.html#escaping-handlebars-expressions

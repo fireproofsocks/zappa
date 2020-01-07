@@ -104,7 +104,7 @@ defmodule ZappaTest do
 
       helpers =
         Zappa.get_default_helpers()
-        |> Zappa.register_helper("hello_x", fn tag -> {:ok, "Hello #{tag.options}"} end)
+        |> Zappa.register_helper("hello_x", fn tag -> {:ok, "Hello #{tag.raw_options}"} end)
 
       output = "<h1>Hello world</h1>"
 
@@ -144,17 +144,6 @@ defmodule ZappaTest do
       </div>
       """
 
-      assert {:error, _} = Zappa.compile(tpl)
-    end
-
-    test "built-in log helper" do
-      tpl = ~s({{log "something happened"}})
-      output = ~s(<% Logger.info\("something happened"\) %>)
-      assert {:ok, output} == Zappa.compile(tpl)
-    end
-
-    test "built-in log helper requires options" do
-      tpl = ~s({{log}})
       assert {:error, _} = Zappa.compile(tpl)
     end
   end

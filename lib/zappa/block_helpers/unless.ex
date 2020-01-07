@@ -5,8 +5,8 @@ defmodule Zappa.BlockHelpers.Unless do
 
   alias Zappa.Tag
 
-  def parse_unless(%Tag{} = tag) do
-    output = "<%= unless #{tag.options} %>#{tag.block_contents}<% end %>"
+  def parse(%Tag{} = tag) do
+    output = "<%= unless #{tag.raw_options} %>#{tag.parsed_block_contents}<% end %>"
     {:ok, output}
   end
 end
