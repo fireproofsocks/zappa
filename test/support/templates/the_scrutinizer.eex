@@ -1,3 +1,0 @@
-<div>
-  My name is <%= HtmlEntities.encode(name) %>. I am a <%= HtmlEntities.encode(occupation) %>.
-</div>

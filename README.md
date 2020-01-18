@@ -19,18 +19,17 @@ Or if you don't need to carefully deal executing templates created by untrusted 
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed by adding `zappa` to your list of dependencies in `mix.exs`.  For the default installation, you should also install the `html_entities` package: it is what Zappa will use to render default tags in your templates.
+If [available in Hex](https://hex.pm/docs/publish), the package can be installed by adding `zappa` to your list of dependencies in `mix.exs`.
 
 ```elixir
 def deps do
   [
-    {:html_entities, "~> 0.5.0"},
     {:zappa, "~> 1.0.0"}
   ]
 end
 ```
 
-For development purposes, you can install this repository using `git` and installing its dependencies:
+For development purposes, you can install this repository using `git`:
 
 ```
 git clone git@github.com:fireproofsocks/zappa.git
@@ -49,19 +48,21 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
 Finish examples
 Clean up tests
-Add docs to built-in helpers, move examples there
+Add docs to built-in helpers, move examples there ?
 Update CHANGELOG
---
-Hooks
+Move @index_var into config
 Dot notation for accessing variables
 Support for ./name or this/name inside regular tags
+cleanup setup_all... there's not always an .out file
+
+--
+Hooks
 
 ## Not Implemented
 
 - raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
 `{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
-- arguments in helpers e.g. `{{agree_button "My Text" class="my-class" visible=true counter=4}}` or `{{#each users as |user userId|}}`
-See https://elixir-recipes.github.io/cli/parsing-cli-arguments/
+
 
 These ones probably will not be implemented because they are too tightly coupled to the input data:
 - [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default `__escaped__` helper

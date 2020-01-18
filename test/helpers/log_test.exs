@@ -20,7 +20,18 @@ defmodule Zappa.Helpers.LogTest do
 
   test "log can be passed multiple arguments" do
     tpl = ~s({{log "key" key "value" value}})
-    output = ~S/<% Logger.info("key") %><% Logger.info(key) %><% Logger.info("value") %><% Logger.info(value) %>/
+
+    output =
+      ~S/<% Logger.info("key") %><% Logger.info(key) %><% Logger.info("value") %><% Logger.info(value) %>/
+
+    assert {:ok, output} == Zappa.compile(tpl)
+  end
+
+  test "unquoted values can be logged at all levels" do
+    tpl = ~s({{log brainwaves level=debug}})
+
+    output = ~S/<% Logger.debug(brainwaves) %>/
+
     assert {:ok, output} == Zappa.compile(tpl)
   end
 end

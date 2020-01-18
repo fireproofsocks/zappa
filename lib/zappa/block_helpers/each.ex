@@ -2,10 +2,10 @@ defmodule Zappa.BlockHelpers.Each do
   @moduledoc false
 
   #
-  #  This helper must include options.
+  # This helper must include options.
   # See https://elixirforum.com/t/complex-loop-in-eex/27698/2
 
-  alias Zappa.Tag
+  alias Zappa.{OptionParser, Tag}
 
   # The name of the index variable should match up with the index helper.
   @index_var "index___helper"
@@ -15,22 +15,36 @@ defmodule Zappa.BlockHelpers.Each do
   end
 
   def parse(tag) do
-    # TODO: parse arguments, eg. each person as |p|
-    var = tag.raw_options
-    this = "this"
+    case OptionParser.split_block(tag.raw_options) do
+      {:ok, {variable, iterator, index}} -> do_parse(tag, variable, iterator, index)
+      {:error, msg} -> {:error, msg}
+    end
+  end
+
+  def do_parse(tag, variable, iterator, index) do
+    #    {var, iterator, index___helper} = OptionParser.block(tag.raw_options)
+    #    IO.inspect(tag)
+    #    %{quoted?: false, value: var} = List.first(tag.args)
+    #    this = "this"
+    # When operating on a map, Enum.with_index/1 returns a list of nested tuples:
+    # iex> Enum.with_index(%{cat: "dog", foo: "bar"})
+    # [{{:cat, "dog"}, 0}, {{:foo, "bar"}, 1}]
 
     # We have to initialize the helpers for some reason (WTF?)
     out = ~s"""
       <% index___helper = nil %>
       <% key___helper = nil %>
-      <%= if (is_list(#{var}) && #{var} != []) || (is_map(#{var}) && #{var} != %{}) do %>
-      <%= Enum.with_index(#{var}) |> Enum.map(fn({#{this}, #{@index_var}}) -> %>
-        <%= if is_tuple(#{this}) do %>
-          <% {key___helper, #{this}} = #{this} %>
-          <% Zappa.nothing(index___helper) %>
-          <% Zappa.nothing(key___helper) %>
+      <%= if (is_list(#{variable}) && #{variable} != []) || (is_map(#{variable}) && #{variable} != %{}) do %>
+      <%= Enum.with_index(#{variable}) |> Enum.map(fn({#{iterator}, #{index}}) -> %>
+        <% #{@index_var} = #{index} %>
+        <%= if is_tuple(#{iterator}) do %>
+          <%# --- this block applies when the variable under enumeration is a map --- %>
+          <% {key___helper, #{iterator}} = #{iterator} %>
+          <% Zappa.shutup(index___helper) %>
+          <% Zappa.shutup(key___helper) %>
           #{tag.parsed_block_contents}
         <% else %>
+          <%# --- this block applies when the variable under enumeration is a list --- %>
           #{tag.parsed_block_contents}
         <% end %>
       <% end) %>
@@ -38,12 +52,5 @@ defmodule Zappa.BlockHelpers.Each do
     """
 
     {:ok, out}
-  end
-
-  @doc """
-  Takes a string used in an each block tag and determines the variables to be used for the iterator and index.
-  """
-  def split(string) when is_binary(string) do
-    
   end
 end

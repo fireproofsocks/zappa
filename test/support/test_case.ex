@@ -33,13 +33,13 @@ defmodule Zappa.TestCase do
       "#{__DIR__}/templates/#{filename}.hbs"
       |> File.read!()
 
-    eex =
-      "#{__DIR__}/templates/#{filename}.eex"
+    out =
+      "#{__DIR__}/templates/#{filename}.out"
       |> File.read!()
 
     %{
       hbs: handlebars,
-      eex: eex
+      out: out
     }
   end
 

@@ -44,14 +44,14 @@ defmodule Zappa.Tag do
             closing_delimiter: ""
 
   @type t :: %__MODULE__{
-               name: String.t,
-               raw_options: String.t,
-               raw_contents: String.t,
-               args: list,
-               kwargs: map,
-               parsed_block_contents: String.t | nil,
-               unparsed_block_contents: String.t | nil,
-               opening_delimiter: String.t,
-               closing_delimiter: String.t
-             }
+          name: String.t(),
+          raw_options: String.t(),
+          raw_contents: String.t(),
+          args: list,
+          kwargs: map,
+          parsed_block_contents: String.t() | nil,
+          unparsed_block_contents: String.t() | nil,
+          opening_delimiter: String.t(),
+          closing_delimiter: String.t()
+        }
 end

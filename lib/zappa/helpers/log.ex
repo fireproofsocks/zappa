@@ -8,19 +8,18 @@ defmodule Zappa.Helpers.Log do
 
   alias Zappa.Tag
 
-  @spec parse(Tag.t()) :: {:error, String.t}
+  @spec parse(Tag.t()) :: {:error, String.t()}
   def parse(%Tag{args: []}) do
     {:error, "Log helper requires options, e.g. {{log 'some message'}}"}
   end
 
   def parse(%Tag{args: args, kwargs: kwargs}) do
     statements =
-    Enum.map(args, fn x -> statement(x, kwargs) end)
-    |> Enum.join("")
+      Enum.map(args, fn x -> statement(x, kwargs) end)
+      |> Enum.join("")
 
     {:ok, statements}
   end
-
 
   defp statement(%{value: value, quoted?: true}, %{level: level}) do
     ~s/<% Logger.#{level}("#{value}") %>/

@@ -5,8 +5,9 @@ defmodule Zappa.Helpers.EscapedDefault do
   alias Zappa.Tag
 
   @spec parse(%Tag{}) :: {:ok, String.t()} | {:ok, String.t()}
-  def parse(%Tag{raw_options: ""} = tag),
-    do: {:ok, "<%= HtmlEntities.encode(#{tag.name}) %>"}
+  def parse(%Tag{raw_options: ""} = tag) do
+    {:ok, "<%= Zappa.HtmlEncoder.encode(#{tag.name}) %>"}
+  end
 
   @spec parse(%Tag{}) :: {:ok, String.t()} | {:error, String.t()}
   def parse(_tag) do

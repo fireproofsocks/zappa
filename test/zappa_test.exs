@@ -15,8 +15,13 @@ defmodule ZappaTest do
   #    end
   #  end
   describe "invalid syntax:" do
-    test "closing tag precedes opening tag" do
+    test "Unexpected closing delimiter" do
       tpl = "this is a bad}} string"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "Unexpected closing delimiter includes some info about where it was found" do
+      tpl = "this is story of a bad, bad girl who never had the }} time"
       assert {:error, _} = Zappa.compile(tpl)
     end
 
@@ -30,8 +35,23 @@ defmodule ZappaTest do
       assert {:error, _} = Zappa.compile(tpl)
     end
 
-    test "unexpected closing block not allowed" do
+    test "unexpected closing block not allowed out of the blue" do
       tpl = "this is {{/my-block}} no good"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "unexpected closing block not allowed within another block" do
+      tpl = "{{#if z}}How about{{/dong-work}}{{/if}}"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "blocks must be closed" do
+      tpl = "{{#if I}} opened a block tag and just wandered off?"
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    test "block helper not registered" do
+      tpl = "{{#dingus}} forgot to register{{/dingus}}"
       assert {:error, _} = Zappa.compile(tpl)
     end
 
@@ -43,7 +63,7 @@ defmodule ZappaTest do
 
   describe "default helpers" do
     test "__escaped__ falls back to @default_escaped_callback when no function registered" do
-      {:ok, "<%= HtmlEntities.encode(hot_rats) %>"} =
+      {:ok, "<%= Zappa.HtmlEncoder.encode(hot_rats) %>"} =
         Zappa.compile("{{hot_rats}}", %Zappa.Helpers{})
     end
 
@@ -71,6 +91,15 @@ defmodule ZappaTest do
     end
   end
 
+  describe "compile!/1" do
+    test "errors are raised" do
+      assert_raise RuntimeError, fn ->
+        tpl = "this is a bad}} string"
+        Zappa.compile!(tpl)
+      end
+    end
+  end
+
   describe "regular {{tags}}" do
     test "multiple tags get parsed" do
       tpl = ~s"""
@@ -84,9 +113,9 @@ defmodule ZappaTest do
 
       output = ~s"""
       <div class="entry">
-        <h1><%= HtmlEntities.encode(title) %></h1>
+        <h1><%= Zappa.HtmlEncoder.encode(title) %></h1>
         <div class="body">
-          <%= HtmlEntities.encode(body) %>
+          <%= Zappa.HtmlEncoder.encode(body) %>
         </div>
       </div>
       """
@@ -226,7 +255,7 @@ defmodule ZappaTest do
       helpers =
         Zappa.register_partial(%Helpers{}, "myPartial", fn _tag -> {:ok, "hello {{thing}}"} end)
 
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
+      assert {:ok, "hello <%= Zappa.HtmlEncoder.encode(thing) %>"} = Zappa.compile(tpl, helpers)
     end
 
     test "partial string that has been registered is substituted in" do
@@ -234,7 +263,7 @@ defmodule ZappaTest do
 
       helpers = Zappa.register_partial(%Helpers{}, "myPartial", "hello {{thing}}")
 
-      assert {:ok, "hello <%= HtmlEntities.encode(thing) %>"} = Zappa.compile(tpl, helpers)
+      assert {:ok, "hello <%= Zappa.HtmlEncoder.encode(thing) %>"} = Zappa.compile(tpl, helpers)
     end
   end
 
@@ -243,7 +272,7 @@ defmodule ZappaTest do
       tpl = "{{#if author}}<h1>{{name}}</h1>{{else}}<h1>Unknown Author</h1>{{/if}}"
 
       output =
-        "<%= if author %><h1><%= HtmlEntities.encode(name) %></h1><% else %><h1>Unknown Author</h1><% end %>"
+        "<%= if author do %><h1><%= Zappa.HtmlEncoder.encode(name) %></h1><% else %><h1>Unknown Author</h1><% end %>"
 
       assert {:ok, output} == Zappa.compile(tpl)
     end
@@ -257,27 +286,26 @@ defmodule ZappaTest do
       tpl = "{{#unless author}}<h1>Unknown Author</h1>{{else}}<h1>{{name}}</h1>{{/unless}}"
 
       output =
-        "<%= unless author %><h1>Unknown Author</h1><% else %><h1><%= HtmlEntities.encode(name) %></h1><% end %>"
+        "<%= unless author do %><h1>Unknown Author</h1><% else %><h1><%= Zappa.HtmlEncoder.encode(name) %></h1><% end %>"
 
       assert {:ok, output} == Zappa.compile(tpl)
     end
   end
 
-  describe "default helper functions" do
-    test "else helper" do
-      tpl = ~s"""
-      <div class="entry">
-        {{else}}
-      </div>
-      """
+  describe "register_block/3" do
+    test "names cannot begin with periods" do
+      assert_raise RuntimeError, fn ->
+        Zappa.get_default_helpers()
+        |> Zappa.register_block(".this", fn _ -> "boom" end)
+      end
+    end
 
-      output = ~s"""
-      <div class="entry">
-        <% else %>
-      </div>
-      """
+    test "register block helper succeeds" do
+      assert %Helpers{block_helpers: %{"x-out" => callback}} =
+               Zappa.get_default_helpers()
+               |> Zappa.register_block("x-out", fn _ -> "xxxxxx" end)
 
-      assert {:ok, output} == Zappa.compile(tpl)
+      assert is_function(callback)
     end
   end
 

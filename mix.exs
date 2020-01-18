@@ -24,7 +24,9 @@ defmodule Zappa.MixProject do
         extras: extras()
         #        groups_for_extras: groups_for_extras()
       ],
-      package: package()
+      package: package(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test]
     ]
   end
 
@@ -52,7 +54,7 @@ defmodule Zappa.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:html_entities, "~> 0.5.0", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.12.1", only: [:dev, :test], runtime: false},
       {:jason, "~> 1.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.21.2", only: :dev, runtime: false},
       {:credo, "~> 1.1.0", only: [:dev, :test], runtime: false}
