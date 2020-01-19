@@ -27,7 +27,7 @@ defmodule Zappa.BlockHelpers.ForEach do
       <%= Enum.with_index(#{variable}) |> Enum.map(fn {#{iterator}, #{index}} -> %>
       <% #{@index_var} = #{index} %>
       <% Zappa.shutup(#{@index_var}) %>
-      #{tag.parsed_block_contents}
+      #{tag.block_contents}
     <% end) %>
     """
 

@@ -42,10 +42,10 @@ defmodule Zappa.BlockHelpers.Each do
           <% {key___helper, #{iterator}} = #{iterator} %>
           <% Zappa.shutup(index___helper) %>
           <% Zappa.shutup(key___helper) %>
-          #{tag.parsed_block_contents}
+          #{tag.block_contents}
         <% else %>
           <%# --- this block applies when the variable under enumeration is a list --- %>
-          #{tag.parsed_block_contents}
+          #{tag.block_contents}
         <% end %>
       <% end) %>
       <% end %>

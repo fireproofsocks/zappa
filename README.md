@@ -1,8 +1,10 @@
 # Zappa
 
-Zappa is an [Elixir](https://elixir-lang.org/) implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  It works by [transpiling](https://en.wikipedia.org/wiki/Source-to-source_compiler) handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  The mother of its invention was the need to have untrusted users create and edit templates to format their own data.  [EEx](https://hexdocs.pm/eex/EEx.html) templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) lacked the features that were needed (if-statements, loops, custom functions, etc.).
+[![Hex pm](http://img.shields.io/hexpm/v/zappa.svg?style=flat)](https://hex.pm/packages/zappa)[![Build Status](https://travis-ci.com/fireproofsocks/zappa.svg?branch=master)](https://travis-ci.com/fireproofsocks/zappa)
+
+Zappa is an [Elixir](https://elixir-lang.org/) implementation of the [Handlebars](https://handlebarsjs.com/) templating language.  It works by converting handlebars templates into native EEx templates (i.e. [Embedded Elixir](https://hexdocs.pm/eex/EEx.html)).  The mother of its invention was the need to have untrusted users create and edit templates to format their own data.  [EEx](https://hexdocs.pm/eex/EEx.html) templates would have been unacceptable for the purpose because they do not restrict what code is allowed to run, and the [Mustache Template System](https://en.wikipedia.org/wiki/Mustache_%28template_system%29) lacked the features that were needed (if-statements, loops, custom functions, etc.).
  
-Like the name "Handlebars", "Zappa" nods to the hirsute nomenclature of its predecessors and pays tribute to the late great iconoclastic [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa).
+Like the name "Handlebars", "Zappa" nods to the hirsute nomenclature of its predecessors (i.e. Handlebars, Mustache) and pays tribute to the late great iconoclastic [Frank Zappa](https://en.wikipedia.org/wiki/Frank_Zappa).
 
 
 ## Similar Packages
@@ -46,23 +48,23 @@ be found at [https://hexdocs.pm/zappa](https://hexdocs.pm/zappa).
 
 ## TODO:
 
-Finish examples
+Create default function for comments
 Clean up tests
-Add docs to built-in helpers, move examples there ?
-Update CHANGELOG
+cleanup setup_all... there's not always an .out file
 Move @index_var into config
 Dot notation for accessing variables
-Support for ./name or this/name inside regular tags
-cleanup setup_all... there's not always an .out file
+Add docs for built-in helpers, add examples
+Update CHANGELOG
+Clean up docs!
+Javascript Encoder?
 
 --
-Hooks
 
 ## Not Implemented
 
-- raw-helper (Used when your final template needs to have mustache blocks.) https://handlebarsjs.com/block_helpers.html
-`{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
 
+- `{{./name}}` or `{{this/name}}` or `{{this.name}}` instead of a helper of the same name
+- Hooks
 
 These ones probably will not be implemented because they are too tightly coupled to the input data:
 - [with](https://handlebarsjs.com/guide/builtin-helpers.html#with). Could be implemented if we temporarily override the default `__escaped__` helper
