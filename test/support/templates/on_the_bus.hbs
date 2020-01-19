@@ -1,0 +1,17 @@
+<h1>Style Sheet</h1>
+<div>
+    <p>This template attempts to use a tag of every type.</p>
+    <ul>
+        <li>{{regular}} : a regular tag</li>
+        <li>{{current_date}} : a registered helper function</li>
+        <li>{{{unsafe}}} : an unescaped tag</li>
+        <li>{{! Anything can "be" in here. }} : a simple comment</li>
+        <li>{{!-- Same as before, but with more delimiters --}} : a comment with alternate delimiters</li>
+        <li>{{>phone_number}} : a simple reusable partial</li>
+        <li>{{#if it_blends}}
+            It blends!
+            {{else}}
+            It does not blend.
+            {{/if}} : a block tag</li>
+    </ul>
+</div>

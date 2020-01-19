@@ -1,14 +1,14 @@
 defmodule Zappa.Helpers.Else do
-  @moduledoc """
-  This module implements the `else` helper function. This clause may be used inside of block-helpers.
-  """
+  @moduledoc false
+  # This module implements the `else` helper function. This clause may be used inside of block-helpers.
+
   alias Zappa.Tag
 
-  def parse_else(%Tag{options: ""}) do
+  def parse(%Tag{raw_options: ""}) do
     {:ok, "<% else %>"}
   end
 
-  def parse_else(_tag) do
+  def parse(_tag) do
     {:error, "{{else}} tag does not allow options."}
   end
 end

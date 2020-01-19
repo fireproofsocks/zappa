@@ -1,0 +1,17 @@
+<h1>Style Sheet</h1>
+<div>
+    <p>This template attempts to use a tag of every type.</p>
+    <ul>
+        <li><%= HtmlEntities.encode(regular) %> : a regular tag</li>
+        <li><%= HtmlEntities.encode(current_date) %> : a registered helper function</li>
+        <li><%= unsafe %> : an unescaped tag</li>
+        <li><%# Anything can "be" in here. %> : a simple comment</li>
+        <li><%# Same as before, but with more delimiters %> : a comment with alternate delimiters</li>
+        <li>888-555-1212 : a simple reusable partial</li>
+        <li><%= if it_blends %>
+            It blends!
+            <% else %>
+            It does not blend.
+            <% end %> : a block tag</li>
+    </ul>
+</div>

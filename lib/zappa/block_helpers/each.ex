@@ -1,20 +1,54 @@
 defmodule Zappa.BlockHelpers.Each do
-  @moduledoc """
-  This module implements the [each](https://handlebarsjs.com/guide/builtin-helpers.html#each) block-helper.
-  This helper must include options.
-  """
+  @moduledoc false
 
-  alias Zappa.Tag
+  #
+  # This helper must include options.
+  # See https://elixirforum.com/t/complex-loop-in-eex/27698/2
 
-  def parse_each(%Tag{options: ""}) do
+  alias Zappa.{OptionParser, Tag}
+
+  # The name of the index variable should match up with the index helper.
+  @index_var "index___helper"
+
+  def parse(%Tag{args: []}) do
     {:error, "The each helper requires options, e.g. {{#each options}}"}
   end
 
-  def parse_each(tag) do
+  def parse(tag) do
+    case OptionParser.split_block(tag.raw_options) do
+      {:ok, {variable, iterator, index}} -> do_parse(tag, variable, iterator, index)
+      {:error, msg} -> {:error, msg}
+    end
+  end
+
+  def do_parse(tag, variable, iterator, index) do
+    #    {var, iterator, index___helper} = OptionParser.block(tag.raw_options)
+    #    IO.inspect(tag)
+    #    %{quoted?: false, value: var} = List.first(tag.args)
+    #    this = "this"
+    # When operating on a map, Enum.with_index/1 returns a list of nested tuples:
+    # iex> Enum.with_index(%{cat: "dog", foo: "bar"})
+    # [{{:cat, "dog"}, 0}, {{:foo, "bar"}, 1}]
+
+    # We have to initialize the helpers for some reason (WTF?)
     out = ~s"""
-        <%= for this <- #{tag.options} do %>
+      <% index___helper = nil %>
+      <% key___helper = nil %>
+      <%= if (is_list(#{variable}) && #{variable} != []) || (is_map(#{variable}) && #{variable} != %{}) do %>
+      <%= Enum.with_index(#{variable}) |> Enum.map(fn({#{iterator}, #{index}}) -> %>
+        <% #{@index_var} = #{index} %>
+        <%= if is_tuple(#{iterator}) do %>
+          <%# --- this block applies when the variable under enumeration is a map --- %>
+          <% {key___helper, #{iterator}} = #{iterator} %>
+          <% Zappa.shutup(index___helper) %>
+          <% Zappa.shutup(key___helper) %>
+          #{tag.block_contents}
+        <% else %>
+          <%# --- this block applies when the variable under enumeration is a list --- %>
           #{tag.block_contents}
         <% end %>
+      <% end) %>
+      <% end %>
     """
 
     {:ok, out}
