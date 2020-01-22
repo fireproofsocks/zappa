@@ -21,7 +21,7 @@ defmodule Zappa.Tag do
 
   ## Examples
 
-  Tag: ``{{song "Joe's Garage" volume="high"}}`
+  Tag: `{{song "Joe's Garage" volume="high"}}`
 
   - `:name`: `song`
   - `:raw_contents`: `song "Joe's Garage" volume="high"`

@@ -35,7 +35,7 @@ defmodule Zappa.MixProject do
       "docs/overview.md",
       "docs/getting_started.md",
       "docs/helpers.md",
-      "docs/block-helpers.md",
+      "docs/block_helpers.md",
       "docs/registering_helpers.md"
     ]
   end

@@ -10,7 +10,7 @@ defmodule Zappa do
     Helpers,
     OptionParser,
     Tag
-  }
+    }
 
   require Logger
 
@@ -40,6 +40,8 @@ defmodule Zappa do
   @default_escaped_callback &Zappa.Helpers.EscapedDefault.parse/1
   @default_unescaped_callback &Zappa.Helpers.UnescapedDefault.parse/1
 
+  # These are the helpers that will be used if either `Zappa.compile/1` or `Zappa.compile!/1` is called.
+  # You can inspect them or modify them by using `Zappa.get_default_helpers/1`
   @default_helpers %Zappa.Helpers{
     helpers: %{
       "else" => &Zappa.Helpers.Else.parse/1,
@@ -163,10 +165,10 @@ defmodule Zappa do
   end
 
   ######################################################################################################################
-  # Find a raw block
+  # Find a raw block end
   defp accumulate_block_content("{{{{/" <> tail, tag_name, acc) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{{{/"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{{{/", "}}}}"),
          :ok <- validate_closing_raw_block_tag(tag, tag_name) do
       {:ok, acc, tail}
     else
@@ -174,62 +176,62 @@ defmodule Zappa do
     end
   end
 
-  defp accumulate_block_content(<<head::binary-size(1), tail::binary>>, tag_name, acc) do
+  defp accumulate_block_content(<<head :: binary - size(1), tail :: binary>>, tag_name, acc) do
     accumulate_block_content(tail, tag_name, acc <> head)
   end
 
   ######################################################################################################################
   # This block is devoted to finding the tag and returning data about it (as a %Tag{} struct)
   ######################################################################################################################
-  @spec accumulate_tag(head, delimiter, accumulator, list) ::
-          {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp accumulate_tag("", _ending_delimiter, _tag_acc, _forbidden_chars),
-    do: {:error, "Unclosed tag."}
+  @spec accumulate_until_x(head, delimiter, accumulator, list) ::
+          {:error, String.t()} | {:ok, String.t(), tail}
+  defp accumulate_until_x("", _ending_delimiter, _tag_acc, _forbidden_chars),
+       do: {:error, "Unclosed tag."}
 
   # We found the 4-char closing delimiter we were looking for
-  @spec accumulate_tag(head, delimiter, accumulator, list) ::
-          {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp accumulate_tag(
-         <<h::binary-size(4), tail::binary>>,
+  @spec accumulate_until_x(head, delimiter, accumulator, list) ::
+          {:error, String.t()} | {:ok, String.t(), tail}
+  defp accumulate_until_x(
+         <<h :: binary - size(4), tail :: binary>>,
          closing_delimiter,
          tag_acc,
          _forbidden_chars
        )
        when closing_delimiter == h do
-    make_tag_struct(tag_acc, tail, closing_delimiter)
+    {:ok, tag_acc, tail}
   end
 
   # We found the 3-char closing delimiter we were looking for
-  @spec accumulate_tag(head, delimiter, accumulator, list) ::
+  @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp accumulate_tag(
-         <<h::binary-size(3), tail::binary>>,
+  defp accumulate_until_x(
+         <<h :: binary - size(3), tail :: binary>>,
          closing_delimiter,
          tag_acc,
          _forbidden_chars
        )
        when closing_delimiter == h do
-    make_tag_struct(tag_acc, tail, closing_delimiter)
+    {:ok, tag_acc, tail}
   end
 
   # We found the 2-char closing delimiter we were looking for
-  @spec accumulate_tag(head, delimiter, accumulator, list) ::
+  @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp accumulate_tag(
-         <<h::binary-size(2), tail::binary>>,
+  defp accumulate_until_x(
+         <<h :: binary - size(2), tail :: binary>>,
          closing_delimiter,
          tag_acc,
-          _forbidden_chars
+         _forbidden_chars
        )
        when closing_delimiter == h do
-    make_tag_struct(tag_acc, tail, closing_delimiter)
+    {:ok, tag_acc, tail}
   end
 
   # Accumulate the character and continue...
-  @spec accumulate_tag(head, delimiter, accumulator, list) ::
+  @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp accumulate_tag(
-         <<head::binary-size(1), tail::binary>>,
+  defp accumulate_until_x(
+         <<head :: binary - size(1), tail :: binary>>,
          closing_delimiter,
          tag_acc,
          forbidden_chars
@@ -237,7 +239,7 @@ defmodule Zappa do
     # is this character forbidden within the tag?
     case Enum.member?(forbidden_chars, head) do
       true -> {:error, "Unexpected character #{head} inside a tag: #{tag_acc}"}
-      false -> accumulate_tag(tail, closing_delimiter, tag_acc <> head, forbidden_chars)
+      false -> accumulate_until_x(tail, closing_delimiter, tag_acc <> head, forbidden_chars)
     end
   end
 
@@ -337,10 +339,22 @@ defmodule Zappa do
   @spec has_eex?(handlebars_template) :: boolean
   defp has_eex?(template), do: Regex.match?(@eex_regex, template)
 
+  @doc """
+  This function offers a simplified take on evaluating expressions of the type encountered in Handlebars.
+  For example, in Elixir an empty list evaluates as "truthy".  But in the simplified world front-end templates, we
+  cannot hope to communicate such nuances, so an empty list is considered "falsey", whereas a non-empty map is
+  considered "truthy".
+  """
+  def is_truthy?(condition) when is_boolean(condition), do: condition === true
+  def is_truthy?(condition) when is_number(condition), do: condition != 0
+  def is_truthy?(condition) when is_binary(condition), do: condition != ""
+  def is_truthy?(condition) when is_list(condition), do: condition != []
+  def is_truthy?(condition) when is_map(condition), do: condition != %{}
+
   # https://elixirforum.com/t/how-to-detect-if-a-given-character-grapheme-is-whitespace/26735/5
-  @spec make_tag_struct(accumulator, tail, delimiter) ::
-          {:error, String.t()} | {:ok, %Tag{}, tail}
-  defp make_tag_struct(tag_acc, tail, closing_delimiter) do
+  @spec make_tag_struct(accumulator, delimiter, delimiter) ::
+          {:error, String.t()} | {:ok, %Tag{}}
+  defp make_tag_struct(tag_acc, opening_delimiter, closing_delimiter) do
     result = String.split(String.trim(tag_acc), ~r/\p{Zs}/u, parts: 2)
     # Splits when there is a {{simple}} tag vs. a tag {{with options}}
     case result do
@@ -350,9 +364,9 @@ defmodule Zappa do
           %Tag{
             name: String.trim(tag_name),
             raw_contents: tag_acc,
+            opening_delimiter: opening_delimiter,
             closing_delimiter: closing_delimiter
-          },
-          tail
+          }
         }
 
       [tag_name, tag_options] ->
@@ -366,14 +380,13 @@ defmodule Zappa do
             args: args,
             kwargs: kwargs,
             raw_contents: tag_acc,
+            opening_delimiter: opening_delimiter,
             closing_delimiter: closing_delimiter
-          },
-          tail
+          }
         }
     end
   end
 
-  # TODO: {{{{raw-helper}}}}
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   # End of handlebars template! All done!
@@ -390,8 +403,8 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{{{"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{{{", "}}}}"),
          :ok <- validate_opening_block_tag(tag),
          {:ok, callback} <- get_block_helper(helpers, tag.name),
          {:ok, block_content, tail} <- accumulate_block_content(tail, tag.name, ""),
@@ -408,10 +421,10 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{!--" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    case accumulate_tag(tail, "--}}", "", []) do
-      {:ok, tag, tail} ->
-        tag = %Tag{tag | opening_delimiter: "{{!--"}
-        parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "--}}", "", []),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{!--", "--}}") do
+      parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+    else
       {:error, message} -> {:error, message}
     end
   end
@@ -421,21 +434,29 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{!" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    case accumulate_tag(tail, "}}", "", ["{"]) do
-      {:ok, tag, tail} ->
-        tag = %Tag{tag | opening_delimiter: "{{!"}
-        parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{!", "}}") do
+      parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+    else
       {:error, message} -> {:error, message}
     end
   end
 
   ######################################################################################################################
   # Block open
+  # - find end of tag
+  # - validate opening tag
+  # - make tag struct
+  # - find end of block OR else
+  # - parse block contents
+  # - update tag struct
+  # - get block helper
+  # - call function
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{#" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}", "", ["{"]),
-          tag <- %Tag{tag | opening_delimiter: "{{#"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{#", "}}"),
          :ok <- validate_opening_block_tag(tag),
          {:ok, callback} <- get_block_helper(helpers, tag.name),
          {:ok, block_content, tail, block_contexts} <-
@@ -450,6 +471,7 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Block close. Blocks must close the tag that opened.
+  # This represents a distinct fork in the parsing flow.
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:error, String.t()}
   defp parse("{{/" <> _tail, _acc, _helpers, []) do
@@ -457,10 +479,10 @@ defmodule Zappa do
   end
 
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
-          {:ok, eex_template} | {:error, String.t()}
+          {:ok, accumulator, String.t(), list} | {:error, String.t()}
   defp parse("{{/" <> tail, acc, _helpers, [active_block | block_contexts]) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{/"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{/", "}}"),
          :ok <- validate_closing_block_tag(tag, active_block) do
       {:ok, acc, tail, block_contexts}
     else
@@ -473,8 +495,8 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{>" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{>"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{>", "}}"),
          :ok <- validate_partial_tag(tag),
          {:ok, callback} <- get_partial_helper(helpers, tag.name),
          {:ok, unparsed_content} <- call_function(callback, tag),
@@ -490,8 +512,8 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{{"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{{", "}}}"),
          :ok <- validate_non_escaped_tag(tag),
          {:ok, function} <- get_unescaped_helper(helpers),
          {:ok, contents} <- call_function(function, tag) do
@@ -506,8 +528,8 @@ defmodule Zappa do
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   defp parse("{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
-    with {:ok, tag, tail} <- accumulate_tag(tail, "}}", "", ["{"]),
-         tag <- %Tag{tag | opening_delimiter: "{{"},
+    with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{", "}}"),
          :ok <- validate_regular_tag(tag),
          {:ok, function} <- get_helper(helpers, tag.name),
          {:ok, contents} <- call_function(function, tag) do
@@ -523,7 +545,7 @@ defmodule Zappa do
   @spec parse(head, accumulator, Helpers.t(), String.t()) :: {:error, String.t()}
   defp parse("}}" <> _tail, acc, _helpers, _block_contexts) do
     if String.length(acc) > 32 do
-      <<first_chunk::binary-size(32)>> <> _ = acc
+      <<first_chunk :: binary - size(32)>> <> _ = acc
       {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
     else
       {:error, "Unexpected closing delimiter: }}"}
@@ -533,15 +555,15 @@ defmodule Zappa do
   # Pass-thru: when we're not in a tag, the character at the head gets appended to the accumulator
   @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse(<<head::binary-size(1)>> <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts),
-    do: parse(tail, acc <> head, helpers, block_contexts)
+  defp parse(<<head :: binary - size(1)>> <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts),
+       do: parse(tail, acc <> head, helpers, block_contexts)
 
   # Callback names cannot begin with a ".", but they can be things like "@index"
   defp validate_callback_name(name) when not is_binary(name) do
     raise "Invalid helper function name."
   end
 
-  defp validate_callback_name(<<head::binary-size(1)>> <> _tail) when head in ["."] do
+  defp validate_callback_name(<<head :: binary - size(1)>> <> _tail) when head in ["."] do
     raise "Invalid helper function name."
   end
 

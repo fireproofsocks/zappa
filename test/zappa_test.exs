@@ -59,6 +59,7 @@ defmodule ZappaTest do
       tpl = ~s"""
       Some <%= evil %> stuff
       """
+
       assert {:error, _error} = Zappa.compile(tpl)
     end
 
@@ -96,6 +97,50 @@ defmodule ZappaTest do
         tpl = "this is a bad}} string"
         Zappa.compile!(tpl)
       end
+    end
+  end
+
+  describe "is_truthy?/1" do
+    test "boolean true" do
+        assert true == Zappa.is_truthy?(true)
+    end
+
+    test "boolean false" do
+      assert false == Zappa.is_truthy?(false)
+    end
+
+    test "number true" do
+      assert true == Zappa.is_truthy?(1)
+      assert true == Zappa.is_truthy?(-1)
+    end
+
+    test "number false" do
+      assert false == Zappa.is_truthy?(0)
+    end
+
+    test "binary true" do
+      assert true == Zappa.is_truthy?("something")
+      assert true == Zappa.is_truthy?(" ")
+    end
+
+    test "binary false" do
+        assert false == Zappa.is_truthy?("")
+    end
+
+    test "list true" do
+      assert true == Zappa.is_truthy?(["german", "for", "instance"])
+    end
+
+    test "list false" do
+      assert false == Zappa.is_truthy?([])
+    end
+
+    test "map true" do
+      assert true == Zappa.is_truthy?(%{yuda: "dong work"})
+    end
+
+    test "map false" do
+      assert false == Zappa.is_truthy?(%{})
     end
   end
 
@@ -349,5 +394,4 @@ defmodule ZappaTest do
       assert {:error, _} = Zappa.compile(tpl)
     end
   end
-
 end

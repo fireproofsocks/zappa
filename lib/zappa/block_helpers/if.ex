@@ -10,6 +10,6 @@ defmodule Zappa.BlockHelpers.If do
   end
 
   def parse(tag) do
-    {:ok, "<%= if #{tag.raw_options} do %>#{tag.block_contents}<% end %>"}
+        {:ok, "<%= if Zappa.is_truthy?(#{tag.raw_options}) do %>#{tag.block_contents}<% end %>"}
   end
 end

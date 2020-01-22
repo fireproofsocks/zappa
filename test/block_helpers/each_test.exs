@@ -40,6 +40,16 @@ defmodule Zappa.BlockHelpers.EachTest do
       assert "0 0: A Token of My Extreme 1 1: Stick It Out 2 2: Sy Borg" ==
                strip_whitespace(actual)
     end
+
+    test "empty list with else block" do
+      actual =
+        "{{#if songs}}{{#each songs}} {{this}}{{/each}}{{else}} Nothing to play {{/if}}"
+        |> Zappa.compile!()
+        |> EEx.eval_string(songs: [])
+
+      assert "Nothing to play" ==
+               strip_whitespace(actual)
+    end
   end
 
   describe "looping over maps" do
