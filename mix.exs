@@ -26,7 +26,7 @@ defmodule Zappa.MixProject do
       ],
       package: package(),
       test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test]
+      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test, "coveralls.travis": :test]
     ]
   end
 

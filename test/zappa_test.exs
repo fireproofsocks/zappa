@@ -63,6 +63,14 @@ defmodule ZappaTest do
       assert {:error, _error} = Zappa.compile(tpl)
     end
 
+    test "orphaned {{else}}" do
+      tpl = ~s"""
+      No block, but suddenly {{else}} came out of nowhere
+      """
+
+      assert {:error, _error} = Zappa.compile(tpl)
+    end
+
     #    test "attempts to hijack" do
     #      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
     #      assert {:error, _} = Zappa.compile(tpl)
@@ -102,7 +110,7 @@ defmodule ZappaTest do
 
   describe "is_truthy?/1" do
     test "boolean true" do
-        assert true == Zappa.is_truthy?(true)
+      assert true == Zappa.is_truthy?(true)
     end
 
     test "boolean false" do
@@ -124,7 +132,7 @@ defmodule ZappaTest do
     end
 
     test "binary false" do
-        assert false == Zappa.is_truthy?("")
+      assert false == Zappa.is_truthy?("")
     end
 
     test "list true" do
@@ -271,32 +279,6 @@ defmodule ZappaTest do
         |> Zappa.register_helper("my_func", fn _tag -> "Hello world" end)
 
       assert {:ok, "<h1>Hello world</h1>"} == Zappa.compile(tpl, helpers)
-    end
-
-    test "built-in else helper" do
-      tpl = ~s"""
-      <div class="entry">
-        {{else}}
-      </div>
-      """
-
-      output = ~s"""
-      <div class="entry">
-        <% else %>
-      </div>
-      """
-
-      assert {:ok, output} == Zappa.compile(tpl)
-    end
-
-    test "built-in else helper does not allow options" do
-      tpl = ~s"""
-      <div class="entry">
-        {{else options not allowed}}
-      </div>
-      """
-
-      assert {:error, _} = Zappa.compile(tpl)
     end
   end
 

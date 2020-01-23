@@ -10,7 +10,7 @@ defmodule Zappa do
     Helpers,
     OptionParser,
     Tag
-    }
+  }
 
   require Logger
 
@@ -37,6 +37,7 @@ defmodule Zappa do
 
   # These are defined separately because the parser will fall back to them if no callbacks are registered in the
   # %Zappa.Helpers{} struct: they are required for sensible operation.
+  @default_comment_callback &Zappa.Helpers.Comment.parse/1
   @default_escaped_callback &Zappa.Helpers.EscapedDefault.parse/1
   @default_unescaped_callback &Zappa.Helpers.UnescapedDefault.parse/1
 
@@ -44,8 +45,8 @@ defmodule Zappa do
   # You can inspect them or modify them by using `Zappa.get_default_helpers/1`
   @default_helpers %Zappa.Helpers{
     helpers: %{
-      "else" => &Zappa.Helpers.Else.parse/1,
       "log" => &Zappa.Helpers.Log.parse/1,
+      "__comment__" => @default_comment_callback,
       "__escaped__" => @default_escaped_callback,
       "__unescaped__" => @default_unescaped_callback,
       "@index" => &Zappa.Helpers.Index.parse/1,
@@ -87,7 +88,7 @@ defmodule Zappa do
   def compile(template, %Zappa.Helpers{} = helpers) do
     case has_eex?(template) do
       true -> {:error, "Compilation unsafe: the source template contains EEx expressions."}
-      false -> parse(template, "", helpers, [])
+      false -> parse(template, "", "", helpers, [])
     end
   end
 
@@ -176,7 +177,7 @@ defmodule Zappa do
     end
   end
 
-  defp accumulate_block_content(<<head :: binary - size(1), tail :: binary>>, tag_name, acc) do
+  defp accumulate_block_content(<<head::binary-size(1), tail::binary>>, tag_name, acc) do
     accumulate_block_content(tail, tag_name, acc <> head)
   end
 
@@ -186,13 +187,13 @@ defmodule Zappa do
   @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, String.t(), tail}
   defp accumulate_until_x("", _ending_delimiter, _tag_acc, _forbidden_chars),
-       do: {:error, "Unclosed tag."}
+    do: {:error, "Unclosed tag."}
 
   # We found the 4-char closing delimiter we were looking for
   @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, String.t(), tail}
   defp accumulate_until_x(
-         <<h :: binary - size(4), tail :: binary>>,
+         <<h::binary-size(4), tail::binary>>,
          closing_delimiter,
          tag_acc,
          _forbidden_chars
@@ -205,7 +206,7 @@ defmodule Zappa do
   @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
   defp accumulate_until_x(
-         <<h :: binary - size(3), tail :: binary>>,
+         <<h::binary-size(3), tail::binary>>,
          closing_delimiter,
          tag_acc,
          _forbidden_chars
@@ -218,7 +219,7 @@ defmodule Zappa do
   @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
   defp accumulate_until_x(
-         <<h :: binary - size(2), tail :: binary>>,
+         <<h::binary-size(2), tail::binary>>,
          closing_delimiter,
          tag_acc,
          _forbidden_chars
@@ -231,7 +232,7 @@ defmodule Zappa do
   @spec accumulate_until_x(head, delimiter, accumulator, list) ::
           {:error, String.t()} | {:ok, %Tag{}, tail}
   defp accumulate_until_x(
-         <<head :: binary - size(1), tail :: binary>>,
+         <<head::binary-size(1), tail::binary>>,
          closing_delimiter,
          tag_acc,
          forbidden_chars
@@ -265,6 +266,18 @@ defmodule Zappa do
         block_helpers,
         name,
         fn tag -> {:error, "Block-helper not registered: #{tag.name}"} end
+      )
+    }
+  end
+
+  @spec get_comment_helper(Helpers.t()) :: {:ok, function}
+  defp get_comment_helper(%Helpers{helpers: helpers_map}) do
+    {
+      :ok,
+      Map.get(
+        helpers_map,
+        "__comment__",
+        @default_comment_callback
       )
     }
   end
@@ -387,22 +400,22 @@ defmodule Zappa do
     end
   end
 
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
   # End of handlebars template! All done!
-  defp parse("", acc, _helpers, []), do: {:ok, acc}
+  defp parse("", acc, _acc2, _helpers, []), do: {:ok, acc}
 
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:error, String.t()}
-  defp parse("", _acc, _helpers, [block | _]) do
+  defp parse("", _acc, _acc2, _helpers, [block | _]) do
     {:error, "Unexpected end of template.  Closing block not found: {{/#{block}}}"}
   end
 
   ######################################################################################################################
   # Raw tags open
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{{{" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{{{", "}}}}"),
          :ok <- validate_opening_block_tag(tag),
@@ -410,7 +423,7 @@ defmodule Zappa do
          {:ok, block_content, tail} <- accumulate_block_content(tail, tag.name, ""),
          {:ok, content} <-
            call_function(callback, Map.put(tag, :block_contents, block_content)) do
-      parse(tail, acc <> content, helpers, block_contexts)
+      parse(tail, acc <> content, acc2, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
     end
@@ -418,12 +431,12 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Comment tag (long)
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{!--" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{!--" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "--}}", "", []),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{!--", "--}}") do
-      parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+      parse(tail, acc <> "<%##{tag.raw_contents}%>", acc2, helpers, block_contexts)
     else
       {:error, message} -> {:error, message}
     end
@@ -431,12 +444,14 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Comment tag (short)
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{!" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{!" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
-         {:ok, tag} <- make_tag_struct(tag_acc, "{{!", "}}") do
-      parse(tail, acc <> "<%##{tag.raw_contents}%>", helpers, block_contexts)
+         {:ok, tag} <- make_tag_struct(tag_acc, "{{!", "}}"),
+         {:ok, callback} <- get_comment_helper(helpers),
+         {:ok, content} <- call_function(callback, tag) do
+      parse(tail, acc <> content, acc2, helpers, block_contexts)
     else
       {:error, message} -> {:error, message}
     end
@@ -452,39 +467,64 @@ defmodule Zappa do
   # - update tag struct
   # - get block helper
   # - call function
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  # Ultimately, this function will receive a value returned by the {{/ ending block function.
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{#" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{#" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{#", "}}"),
          :ok <- validate_opening_block_tag(tag),
          {:ok, callback} <- get_block_helper(helpers, tag.name),
-         {:ok, block_content, tail, block_contexts} <-
-           parse(tail, "", helpers, [tag.name | block_contexts]),
-         {:ok, content} <-
-           call_function(callback, Map.put(tag, :block_contents, block_content)) do
-      parse(tail, acc <> content, helpers, block_contexts)
+         {:ok, block_content, else_content, tail, block_contexts} <-
+           parse(tail, "", "", helpers, [tag.name | block_contexts]),
+         tag <- Map.put(tag, :block_contents, block_content),
+         tag <- Map.put(tag, :else_contents, else_content),
+         {:ok, content} <- call_function(callback, tag) do
+      parse(tail, acc <> content, acc2, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
     end
   end
 
+  # A block must be in context when an else is encountered
+  defp parse("{{else}}" <> _tail, _acc, _acc2, _helpers, []) do
+    {:error,
+     "Orphaned {{else}} tag: {{else}} tags may only be used inside blocks that support them."}
+  end
+
+  # One 1 else tag is allowed per block; if the secondary accumulator has been used, that means we already encountered
+  # an else.
+  defp parse("{{else}}" <> _tail, _acc, acc2, _helpers, [active_context | _block_contexts])
+       when acc2 != "" do
+    {:error, "Multiple {{else}} blocks detected inside {{#{active_context}}} block"}
+  end
+
+  # Stash the accumulator into the secondary accumulator
+  defp parse("{{else}}" <> tail, acc, "", %Zappa.Helpers{} = helpers, block_contexts) do
+    parse(tail, "", acc, helpers, block_contexts)
+  end
+
   ######################################################################################################################
   # Block close. Blocks must close the tag that opened.
-  # This represents a distinct fork in the parsing flow.
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:error, String.t()}
-  defp parse("{{/" <> _tail, _acc, _helpers, []) do
+  defp parse("{{/" <> _tail, _acc, _acc2, _helpers, []) do
     {:error, "Unexpected closing block tag."}
   end
 
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  # This variant will specifically return to the opening {{#block}} parse function variant
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, accumulator, String.t(), list} | {:error, String.t()}
-  defp parse("{{/" <> tail, acc, _helpers, [active_block | block_contexts]) do
+  defp parse("{{/" <> tail, acc, acc2, _helpers, [active_block | block_contexts]) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{/", "}}"),
          :ok <- validate_closing_block_tag(tag, active_block) do
-      {:ok, acc, tail, block_contexts}
+      block_content = if acc2 == "", do: acc, else: acc2
+      else_content = if acc2 == "", do: nil, else: acc
+      #      IO.puts("End of block {{/#{active_block}")
+      #      IO.inspect(block_content, label: "Block Content")
+      #      IO.inspect(else_content, label: "Else Content")
+      {:ok, block_content, else_content, tail, block_contexts}
     else
       {:error, error} -> {:error, error}
     end
@@ -492,16 +532,16 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Partial
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{>" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{>" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{>", "}}"),
          :ok <- validate_partial_tag(tag),
          {:ok, callback} <- get_partial_helper(helpers, tag.name),
          {:ok, unparsed_content} <- call_function(callback, tag),
-         {:ok, parsed_content} <- parse(unparsed_content, "", helpers, block_contexts) do
-      parse(tail, acc <> parsed_content, helpers, block_contexts)
+         {:ok, parsed_content} <- parse(unparsed_content, "", acc2, helpers, block_contexts) do
+      parse(tail, acc <> parsed_content, acc2, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
     end
@@ -509,15 +549,15 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Non-escaped tag
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{{" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{{", "}}}"),
          :ok <- validate_non_escaped_tag(tag),
          {:ok, function} <- get_unescaped_helper(helpers),
          {:ok, contents} <- call_function(function, tag) do
-      parse(tail, acc <> contents, helpers, block_contexts)
+      parse(tail, acc <> contents, acc2, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
     end
@@ -525,15 +565,15 @@ defmodule Zappa do
 
   ######################################################################################################################
   # Regular tag (HTML-escaped)
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse("{{" <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts) do
+  defp parse("{{" <> tail, acc, acc2, %Zappa.Helpers{} = helpers, block_contexts) do
     with {:ok, tag_acc, tail} <- accumulate_until_x(tail, "}}", "", ["{"]),
          {:ok, tag} <- make_tag_struct(tag_acc, "{{", "}}"),
          :ok <- validate_regular_tag(tag),
          {:ok, function} <- get_helper(helpers, tag.name),
          {:ok, contents} <- call_function(function, tag) do
-      parse(tail, acc <> contents, helpers, block_contexts)
+      parse(tail, acc <> contents, acc2, helpers, block_contexts)
     else
       {:error, error} -> {:error, error}
     end
@@ -542,10 +582,10 @@ defmodule Zappa do
   ######################################################################################################################
   # Error: ending delimiter found
   # Try to include some information in the error message
-  @spec parse(head, accumulator, Helpers.t(), String.t()) :: {:error, String.t()}
-  defp parse("}}" <> _tail, acc, _helpers, _block_contexts) do
+  @spec parse(head, accumulator, accumulator, Helpers.t(), String.t()) :: {:error, String.t()}
+  defp parse("}}" <> _tail, acc, _acc2, _helpers, _block_contexts) do
     if String.length(acc) > 32 do
-      <<first_chunk :: binary - size(32)>> <> _ = acc
+      <<first_chunk::binary-size(32)>> <> _ = acc
       {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
     else
       {:error, "Unexpected closing delimiter: }}"}
@@ -553,17 +593,23 @@ defmodule Zappa do
   end
 
   # Pass-thru: when we're not in a tag, the character at the head gets appended to the accumulator
-  @spec parse(handlebars_template, accumulator, Helpers.t(), block_contexts) ::
+  @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, eex_template} | {:error, String.t()}
-  defp parse(<<head :: binary - size(1)>> <> tail, acc, %Zappa.Helpers{} = helpers, block_contexts),
-       do: parse(tail, acc <> head, helpers, block_contexts)
+  defp parse(
+         <<head::binary-size(1)>> <> tail,
+         acc,
+         acc2,
+         %Zappa.Helpers{} = helpers,
+         block_contexts
+       ),
+       do: parse(tail, acc <> head, acc2, helpers, block_contexts)
 
   # Callback names cannot begin with a ".", but they can be things like "@index"
   defp validate_callback_name(name) when not is_binary(name) do
     raise "Invalid helper function name."
   end
 
-  defp validate_callback_name(<<head :: binary - size(1)>> <> _tail) when head in ["."] do
+  defp validate_callback_name(<<head::binary-size(1)>> <> _tail) when head in ["."] do
     raise "Invalid helper function name."
   end
 

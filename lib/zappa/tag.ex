@@ -12,7 +12,8 @@ defmodule Zappa.Tag do
     `:quoted?` so the implementations can react differently if a value was passed directly as a variable (unquoted)
     or as a literal quoted string.
   - `:kwargs` - a map of [hash arguments](https://handlebarsjs.com/guide/block-helpers.html#hash-arguments).
-  - `:block_contents` - the full contents of a block (only applicable for block tags). The contents will be parsed or unparsed depending on how the parser encountered, i.e. `{{#block}}` tags will yield parsed `block_contents` whereas `{{{{#block}}}}` tags will yield unparsed `block_contents`.
+  - `:block_contents` - the contents of a block (only applicable for block tags), up to an `{{else}}` tag or the closing tag (whichever comes first). The contents will be parsed or unparsed depending on how the parser encountered, i.e. `{{#block}}` tags will yield parsed `block_contents` whereas `{{{{#block}}}}` tags will yield unparsed `block_contents`.
+  - `:else_contents` - the contents of a block from the `{{else}}` tag up to the closing block tag. If the block does not contain an `{{else}}` tag, this value will be null. The contents will always be parsed since `{{{{raw}}}}` tags are not searched for `{{else}}` tags.
   - `:opening_delimiter` - the string that marked the beginning of the tag.
   - `:closing_delimiter` - the string that marked the end of the tag.
 
@@ -21,12 +22,17 @@ defmodule Zappa.Tag do
 
   ## Examples
 
-  Tag: `{{song "Joe's Garage" volume="high"}}`
+  Tag:
+
+  ```
+  {{song "Joe's Garage" volume="high"}}
+  ```
 
   - `:name`: `song`
   - `:raw_contents`: `song "Joe's Garage" volume="high"`
   - `:raw_options`: `"Joe's Garage" volume="high"`
   - `:block_contents`: nil
+  - `:else_contents`: nil
 
   """
 
@@ -36,6 +42,7 @@ defmodule Zappa.Tag do
             args: [],
             kwargs: %{},
             block_contents: nil,
+            else_contents: nil,
             opening_delimiter: "",
             closing_delimiter: ""
 
@@ -46,6 +53,7 @@ defmodule Zappa.Tag do
           args: list,
           kwargs: map,
           block_contents: String.t() | nil,
+          else_contents: String.t() | nil,
           opening_delimiter: String.t(),
           closing_delimiter: String.t()
         }

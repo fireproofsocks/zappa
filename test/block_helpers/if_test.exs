@@ -85,7 +85,6 @@ defmodule Zappa.BlockHelpers.IfTest do
         Zappa.compile!(hbs)
         |> EEx.eval_string(you_are_what_you_is: "")
 
-
       assert strip_whitespace("Here you aren't") == strip_whitespace(actual)
     end
 
