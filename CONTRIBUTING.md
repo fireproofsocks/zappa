@@ -15,6 +15,6 @@ Thank you for considering contributing to Zappa! Before diving into too much wor
 8. Push your local branch to your remote.
 9. Open a pull request from your fork's feature or bug branch to the original's master branch. 
 
-Note: Merge or rebase? I'm fine with merges, unless you have a really compelling reason to use rebases.  When your pull request is closed, I will probably squash the commits, but I'm not too worried about having lots of commits on an open-source project.
+Note: Merge or rebase? I prefer the simplicity of merges unless you have a really compelling reason to use rebase.  When your pull request is closed, I will probably squash the commits, but I'm not too worried about having lots of commits on an open-source project.
 
 Thank you! 

@@ -71,10 +71,41 @@ defmodule ZappaTest do
       assert {:error, _error} = Zappa.compile(tpl)
     end
 
-    #    test "attempts to hijack" do
-    #      tpl = "this is {{ derp IO.puts(\"Snark\") }} malicious"
-    #      assert {:error, _} = Zappa.compile(tpl)
-    #    end
+    test "multiple {{else}}" do
+      tpl = ~s"""
+      {{#if fruitfly}} something {{else}} whoops {{else}} nothing {{/if}}
+      """
+
+      assert {:error, _error} = Zappa.compile(tpl)
+    end
+
+    @tag :skip
+    # Annoying, but I can't think of an elegant way to test for this without adding yet another argument to parse()
+    test "multiple {{else}} should fail even when they are right next to each other" do
+      tpl = ~s"""
+      {{#if fruitfly}}{{else}}{{else}}{{/if}}
+      """
+      assert {:error, error} = Zappa.compile(tpl)
+    end
+  end
+
+  # How to detect code when variables could be anything and parens are optional?
+  describe "security checks" do
+#    @tag :skip
+    test "attempts to hijack should fail" do
+      tpl = ~s"""
+      {{#if File.write!("/tmp/file.txt", "boned")}} Did something happen? {{/if}}
+      """
+      assert {:error, _} = Zappa.compile(tpl)
+    end
+
+    @tag :skip
+    test "attempts to hijack a string fail" do
+      tpl = ~s"""
+      {{log "#{File.write!("/tmp/file.txt", "boned")}" }} Did something happen?
+      """
+      assert {:error, _} = Zappa.compile(tpl)
+    end
   end
 
   describe "default helpers" do

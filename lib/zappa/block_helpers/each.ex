@@ -34,20 +34,22 @@ defmodule Zappa.BlockHelpers.Each do
     out = ~s"""
       <% index___helper = nil %>
       <% key___helper = nil %>
-      <%= if (is_list(#{variable}) && #{variable} != []) || (is_map(#{variable}) && #{variable} != %{}) do %>
-      <%= Enum.with_index(#{variable}) |> Enum.map(fn({#{iterator}, #{index}}) -> %>
-        <% #{@index_var} = #{index} %>
-        <%= if is_tuple(#{iterator}) do %>
-          <%# --- this block applies when the variable under enumeration is a map --- %>
-          <% {key___helper, #{iterator}} = #{iterator} %>
-          <% Zappa.shutup(index___helper) %>
-          <% Zappa.shutup(key___helper) %>
-          #{tag.block_contents}
-        <% else %>
-          <%# --- this block applies when the variable under enumeration is a list --- %>
-          #{tag.block_contents}
-        <% end %>
-      <% end) %>
+      <%= if Zappa.is_truthy?(#{variable}) do %>
+        <%= Enum.with_index(#{variable}) |> Enum.map(fn({#{iterator}, #{index}}) -> %>
+          <% #{@index_var} = #{index} %>
+          <%= if is_tuple(#{iterator}) do %>
+            <%# --- this block applies when the variable under enumeration is a map --- %>
+            <% {key___helper, #{iterator}} = #{iterator} %>
+            <% Zappa.shutup(index___helper) %>
+            <% Zappa.shutup(key___helper) %>
+            #{tag.block_contents}
+          <% else %>
+            <%# --- this block applies when the variable under enumeration is a list --- %>
+            #{tag.block_contents}
+          <% end %>
+        <% end) %>
+      <% else %>
+        #{tag.else_contents}
       <% end %>
     """
 

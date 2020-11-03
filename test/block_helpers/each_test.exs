@@ -43,7 +43,7 @@ defmodule Zappa.BlockHelpers.EachTest do
 
     test "empty list with else block" do
       actual =
-        "{{#if songs}}{{#each songs}} {{this}}{{/each}}{{else}} Nothing to play {{/if}}"
+        "{{#each songs}} {{this}}{{else}} Nothing to play {{/each}}"
         |> Zappa.compile!()
         |> EEx.eval_string(songs: [])
 

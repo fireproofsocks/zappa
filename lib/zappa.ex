@@ -88,7 +88,7 @@ defmodule Zappa do
   def compile(template, %Zappa.Helpers{} = helpers) do
     case has_eex?(template) do
       true -> {:error, "Compilation unsafe: the source template contains EEx expressions."}
-      false -> parse(template, "", "", helpers, [])
+      false -> parse(template, "", nil, helpers, [])
     end
   end
 
@@ -353,10 +353,27 @@ defmodule Zappa do
   defp has_eex?(template), do: Regex.match?(@eex_regex, template)
 
   @doc """
+  Because we are transpiling Handlebars code to EEx, we need to know whether the thing we are transpiling represents
+  safe code: we do not want the EEx code to do something unexpected (or malicious) when executed. If Zappa were a
+  full Handlebars parser (and not a translator), this step wouldn't be necessary.
+  """
+  def is_safe?(%{value: value, quoted?: true}) do
+    !Regex.match?(~r/#\{/, value)
+  end
+
+  def is_safe?(%{value: value, quoted?: false}) do
+    Regex.match?(~r/^[a-z]{1}[a-z0-9\._]+$/, value)
+  end
+
+  def is_safe?(args) when is_list(args) do
+    Enum.reduce(args, true, fn x, acc -> acc && is_safe?(x) end)
+  end
+
+  @doc """
   This function offers a simplified take on evaluating expressions of the type encountered in Handlebars.
-  For example, in Elixir an empty list evaluates as "truthy".  But in the simplified world front-end templates, we
-  cannot hope to communicate such nuances, so an empty list is considered "falsey", whereas a non-empty map is
-  considered "truthy".
+  For example, in Elixir an empty list evaluates as "truthy".  But in the simplified world of front-end templates, we
+  cannot hope to communicate such nuances, so an empty list or map is considered "falsey", whereas non-empty variants
+  are considered "truthy".
   """
   def is_truthy?(condition) when is_boolean(condition), do: condition === true
   def is_truthy?(condition) when is_number(condition), do: condition != 0
@@ -368,36 +385,31 @@ defmodule Zappa do
   @spec make_tag_struct(accumulator, delimiter, delimiter) ::
           {:error, String.t()} | {:ok, %Tag{}}
   defp make_tag_struct(tag_acc, opening_delimiter, closing_delimiter) do
-    result = String.split(String.trim(tag_acc), ~r/\p{Zs}/u, parts: 2)
-    # Splits when there is a {{simple}} tag vs. a tag {{with options}}
-    case result do
-      [tag_name] ->
-        {
-          :ok,
-          %Tag{
-            name: String.trim(tag_name),
-            raw_contents: tag_acc,
-            opening_delimiter: opening_delimiter,
-            closing_delimiter: closing_delimiter
-          }
-        }
+    String.split(String.trim(tag_acc), ~r/\p{Zs}/u, parts: 2)
+    |> decorate_tag(%Tag{
+      raw_contents: tag_acc,
+      opening_delimiter: opening_delimiter,
+      closing_delimiter: closing_delimiter
+    })
+  end
 
-      [tag_name, tag_options] ->
-        {args, kwargs} = OptionParser.split(tag_options)
+  # {{simple}} tag with no options. Easy peasy.
+  defp decorate_tag([tag_name], %Tag{} = tag) do
+    {:ok, %Tag{tag | name: String.trim(tag_name)}}
+  end
 
-        {
-          :ok,
-          %Tag{
-            name: String.trim(tag_name),
-            raw_options: String.trim(tag_options),
-            args: args,
-            kwargs: kwargs,
-            raw_contents: tag_acc,
-            opening_delimiter: opening_delimiter,
-            closing_delimiter: closing_delimiter
-          }
+  # tag {{with options}}
+  defp decorate_tag([tag_name, tag_options], %Tag{} = tag) do
+    {args, kwargs} = OptionParser.split(tag_options)
+    {
+        :ok,
+        %Tag{tag |
+          name: String.trim(tag_name),
+          raw_options: String.trim(tag_options),
+          args: args,
+          kwargs: kwargs
         }
-    end
+    }
   end
 
   @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
@@ -486,6 +498,7 @@ defmodule Zappa do
     end
   end
 
+  # Orphaned else tag: it did not appear within a block
   # A block must be in context when an else is encountered
   defp parse("{{else}}" <> _tail, _acc, _acc2, _helpers, []) do
     {:error,
@@ -496,23 +509,25 @@ defmodule Zappa do
   # an else.
   defp parse("{{else}}" <> _tail, _acc, acc2, _helpers, [active_context | _block_contexts])
        when acc2 != "" do
-    {:error, "Multiple {{else}} blocks detected inside {{#{active_context}}} block"}
+    {:error, "Multiple {{else}} blocks detected inside {{##{active_context}}} block"}
   end
 
-  # Stash the accumulator into the secondary accumulator
+  # Proper else found within a block tag
+  # Stash the accumulator into the secondary accumulator, reset the main accumulator
   defp parse("{{else}}" <> tail, acc, "", %Zappa.Helpers{} = helpers, block_contexts) do
     parse(tail, "", acc, helpers, block_contexts)
   end
 
   ######################################################################################################################
-  # Block close. Blocks must close the tag that opened.
+  # Unexpected block close
   @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:error, String.t()}
-  defp parse("{{/" <> _tail, _acc, _acc2, _helpers, []) do
-    {:error, "Unexpected closing block tag."}
+  defp parse("{{/" <> tail, _acc, _acc2, _helpers, []) do
+    {:error, "Unexpected closing block tag: {{/#{String.slice(tail, 0..5)}..."}
   end
 
-  # This variant will specifically return to the opening {{#block}} parse function variant
+  # Regular block close.
+  # This will return to the opening {{#block}} parse function variant
   @spec parse(handlebars_template, accumulator, accumulator, Helpers.t(), block_contexts) ::
           {:ok, accumulator, String.t(), list} | {:error, String.t()}
   defp parse("{{/" <> tail, acc, acc2, _helpers, [active_block | block_contexts]) do
@@ -520,10 +535,7 @@ defmodule Zappa do
          {:ok, tag} <- make_tag_struct(tag_acc, "{{/", "}}"),
          :ok <- validate_closing_block_tag(tag, active_block) do
       block_content = if acc2 == "", do: acc, else: acc2
-      else_content = if acc2 == "", do: nil, else: acc
-      #      IO.puts("End of block {{/#{active_block}")
-      #      IO.inspect(block_content, label: "Block Content")
-      #      IO.inspect(else_content, label: "Else Content")
+      else_content = if acc2 == "", do: "", else: acc
       {:ok, block_content, else_content, tail, block_contexts}
     else
       {:error, error} -> {:error, error}
@@ -584,12 +596,7 @@ defmodule Zappa do
   # Try to include some information in the error message
   @spec parse(head, accumulator, accumulator, Helpers.t(), String.t()) :: {:error, String.t()}
   defp parse("}}" <> _tail, acc, _acc2, _helpers, _block_contexts) do
-    if String.length(acc) > 32 do
-      <<first_chunk::binary-size(32)>> <> _ = acc
-      {:error, "Unexpected closing delimiter: }}#{first_chunk}"}
-    else
-      {:error, "Unexpected closing delimiter: }}"}
-    end
+    {:error, "Unexpected closing delimiter: }}#{String.slice(acc, 0..32)}"}
   end
 
   # Pass-thru: when we're not in a tag, the character at the head gets appended to the accumulator

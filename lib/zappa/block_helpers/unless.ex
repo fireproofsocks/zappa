@@ -9,14 +9,10 @@ defmodule Zappa.BlockHelpers.Unless do
     {:error, "The unless helper requires options, e.g. {{#unless options}}"}
   end
 
-  def parse(%Tag{else_contents: nil} = tag) do
-    {:ok, "<%= unless Zappa.is_truthy?(#{tag.raw_options}) do %>#{tag.block_contents}<% end %>"}
-  end
-
-  def parse(%Tag{else_contents: else_contents} = tag) do
+  def parse(%Tag{} = tag) do
     {:ok,
      "<%= unless Zappa.is_truthy?(#{tag.raw_options}) do %>#{tag.block_contents}<% else %>#{
-       else_contents
+       tag.else_contents
      }<% end %>"}
   end
 end
